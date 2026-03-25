@@ -91,6 +91,10 @@ build/
 # Docker
 .dockerignore
 docker-compose.override.yml
+*.yml
+*.yaml
+*.sh
+SETUP_SCRIPTS/
 
 # CI/CD
 .github/workflows/*.backup
