@@ -11,7 +11,7 @@ Provides high-level operations for:
 
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import math
 
@@ -154,23 +154,61 @@ class EmailService:
         """
         if not user.preferences or not user.preferences.get("gmail_connected"):
             return None
-        
-        access_token = user.preferences.get("gmail_access_token")
-        refresh_token = user.preferences.get("gmail_refresh_token")
-        expires_at = user.preferences.get("gmail_token_expires_at")
+
+        preferences = dict(user.preferences or {})
+        access_token = preferences.get("gmail_access_token")
+        refresh_token = preferences.get("gmail_refresh_token")
+        expires_at = preferences.get("gmail_token_expires_at")
+
+        if not access_token:
+            return None
+
+        def _is_expiring(raw_value: Any) -> bool:
+            if raw_value is None:
+                return False
+
+            threshold = datetime.utcnow() + timedelta(minutes=5)
+            if isinstance(raw_value, (int, float)):
+                return datetime.utcfromtimestamp(raw_value) <= threshold
+
+            if isinstance(raw_value, str):
+                try:
+                    if raw_value.isdigit():
+                        return datetime.utcfromtimestamp(float(raw_value)) <= threshold
+
+                    parsed = datetime.fromisoformat(raw_value.replace("Z", "+00:00"))
+                    if parsed.tzinfo is not None:
+                        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                    return parsed <= threshold
+                except Exception:
+                    logger.warning("Invalid gmail token expiry value for user %s", user.id)
+                    return True
+
+            return True
         
         # Check if token needs refresh
-        if expires_at and datetime.fromtimestamp(expires_at) <= datetime.utcnow() + timedelta(minutes=5):
+        if _is_expiring(expires_at):
             if refresh_token:
                 try:
                     new_token_response = self.oauth_manager.refresh_access_token(refresh_token)
-                    user.preferences["gmail_access_token"] = new_token_response["access_token"]
-                    user.preferences["gmail_token_expires_at"] = new_token_response["expires_at"]
+                    preferences["gmail_access_token"] = new_token_response["access_token"]
+                    preferences["gmail_token_expires_at"] = new_token_response["expires_at"]
+                    user.preferences = preferences
                     self.db.commit()
                     access_token = new_token_response["access_token"]
                 except Exception as e:
                     logger.error(f"Error refreshing Gmail token: {e}")
+                    # Treat refresh failures as disconnected so the user is guided to reconnect.
+                    preferences["gmail_connected"] = False
+                    preferences["gmail_access_token"] = None
+                    user.preferences = preferences
+                    self.db.commit()
                     return None
+            else:
+                preferences["gmail_connected"] = False
+                user.preferences = preferences
+                self.db.commit()
+                return None
         
         try:
             return GmailClient(access_token)

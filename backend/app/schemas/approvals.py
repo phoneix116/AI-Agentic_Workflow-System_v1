@@ -15,13 +15,13 @@ from pydantic import BaseModel, Field
 class ApprovalActionType(str, Enum):
     """Type of action requiring approval."""
     SEND_EMAIL = "send_email"
+    SEND_MESSAGE = "send_message"
     CREATE_EVENT = "create_event"
     UPDATE_EVENT = "update_event"
     DELETE_EVENT = "delete_event"
-    CREATE_TASK = "create_task"
-    UPDATE_TASK = "update_task"
-    DELETE_TASK = "delete_task"
-    SEND_MESSAGE = "send_message"  # WhatsApp (post-MVP)
+    MARK_COMPLETE = "mark_complete"
+    SCHEDULE_TASK = "schedule_task"
+    OTHER = "other"
 
 
 class ApprovalStatus(str, Enum):
@@ -251,7 +251,7 @@ APPROVAL_UI_HINT_TASK = {
     "icon": "check-circle",
     "color": "green",
     "priority": "low",
-    "display_template": "Create task: {title}?",
+    "display_template": "Task action: {title}?",
     "show_preview": False
 }
 
@@ -272,19 +272,19 @@ APPROVAL_UI_HINTS: dict[ApprovalActionType, dict] = {
         "display_template": "Delete event: {title}?",
         "show_preview": True
     },
-    ApprovalActionType.CREATE_TASK: APPROVAL_UI_HINT_TASK,
-    ApprovalActionType.UPDATE_TASK: {
+    ApprovalActionType.MARK_COMPLETE: APPROVAL_UI_HINT_TASK,
+    ApprovalActionType.SCHEDULE_TASK: {
         "icon": "check-circle",
         "color": "green",
         "priority": "low",
-        "display_template": "Update task: {title}?",
+        "display_template": "Schedule task: {title}?",
         "show_preview": False
     },
-    ApprovalActionType.DELETE_TASK: {
+    ApprovalActionType.OTHER: {
         "icon": "check-circle",
-        "color": "red",
+        "color": "gray",
         "priority": "medium",
-        "display_template": "Delete task: {title}?",
+        "display_template": "Review action: {title}?",
         "show_preview": False
     },
 }

@@ -2,9 +2,14 @@
 
 import redis
 import json
+import logging
+import time
 from typing import Any, Optional
 from pydantic_settings import BaseSettings
 import os
+
+
+logger = logging.getLogger(__name__)
 
 
 class RedisSettings(BaseSettings):
@@ -44,19 +49,114 @@ redis_pool = redis.ConnectionPool.from_url(
 # Create Redis client
 redis_client = redis.Redis(connection_pool=redis_pool)
 
+_REDIS_HEALTHCHECK_INTERVAL_SECONDS = 15
+_REDIS_RETRY_ATTEMPTS = 2
+_REDIS_RETRY_BACKOFF_SECONDS = 0.2
+_redis_last_healthcheck = 0.0
+_redis_available = True
 
-def get_redis() -> redis.Redis:
-    """Get Redis client instance."""
-    return redis_client
+
+class _NullPubSub:
+    """No-op Redis pub/sub used when Redis is unavailable."""
+
+    def subscribe(self, *_channels):
+        return None
+
+    def get_message(self, *_args, **_kwargs):
+        return None
+
+    def unsubscribe(self, *_channels):
+        return None
+
+    def close(self):
+        return None
+
+
+class _NullRedis:
+    """No-op Redis client used for graceful degradation."""
+
+    def ping(self):
+        return False
+
+    def get(self, *_args, **_kwargs):
+        return None
+
+    def setex(self, *_args, **_kwargs):
+        return False
+
+    def publish(self, *_args, **_kwargs):
+        return 0
+
+    def zrange(self, *_args, **_kwargs):
+        return []
+
+    def zadd(self, *_args, **_kwargs):
+        return 0
+
+    def expire(self, *_args, **_kwargs):
+        return False
+
+    def delete(self, *_args, **_kwargs):
+        return 0
+
+    def exists(self, *_args, **_kwargs):
+        return 0
+
+    def incrby(self, *_args, **_kwargs):
+        return 0
+
+    def decrby(self, *_args, **_kwargs):
+        return 0
+
+    def pubsub(self):
+        return _NullPubSub()
+
+
+_null_redis_client = _NullRedis()
+
+
+def _refresh_redis_health() -> bool:
+    """Refresh cached Redis health using bounded retries."""
+    global _redis_last_healthcheck, _redis_available
+
+    now = time.time()
+    if now - _redis_last_healthcheck < _REDIS_HEALTHCHECK_INTERVAL_SECONDS:
+        return _redis_available
+
+    available = False
+    for attempt in range(1, _REDIS_RETRY_ATTEMPTS + 1):
+        try:
+            available = bool(redis_client.ping())
+            if available:
+                break
+        except Exception as exc:
+            logger.warning(
+                "redis.healthcheck.failed",
+                extra={"attempt": attempt, "error": str(exc)},
+            )
+            if attempt < _REDIS_RETRY_ATTEMPTS:
+                time.sleep(_REDIS_RETRY_BACKOFF_SECONDS)
+
+    _redis_available = available
+    _redis_last_healthcheck = now
+    return _redis_available
+
+
+def get_redis() -> Any:
+    """Get Redis client instance with graceful fallback when unavailable."""
+    if _refresh_redis_health():
+        return redis_client
+
+    return _null_redis_client
 
 
 async def ping_redis() -> bool:
     """Test Redis connection."""
     try:
-        result = redis_client.ping()
+        result = get_redis().ping()
         return bool(result)
     except Exception as e:
-        print(f"Redis connection failed: {e}")
+        logger.warning("redis.ping.failed", extra={"error": str(e)})
         return False
 
 

@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.auth import JWTManager
 from app.core.config import settings
 from app.core.metrics import metrics_collector
-from app.db.config import get_db
+from app.cache.config import ping_redis
+from app.db.config import get_db, SessionLocal
 from app.db.models import User
 from app.schemas.common import ApiResponse
 
@@ -19,12 +21,29 @@ async def health_check() -> ApiResponse:
 
 @router.get("/ready", response_model=ApiResponse)
 async def readiness_check() -> ApiResponse:
+    db_ready = False
+
+    db = SessionLocal()
+    try:
+        db.execute(text("SELECT 1"))
+        db_ready = True
+    except Exception:
+        db_ready = False
+    finally:
+        db.close()
+
+    cache_ready = await ping_redis()
+
+    overall_status = "ready" if db_ready and cache_ready else "degraded"
     checks = {
         "api": "ready",
-        "database": "not_configured",
-        "cache": "not_configured",
+        "database": "ready" if db_ready else "unavailable",
+        "cache": "ready" if cache_ready else "unavailable",
     }
-    return ApiResponse(message="Service readiness status", data={"checks": checks})
+    return ApiResponse(
+        message="Service readiness status",
+        data={"status": overall_status, "checks": checks},
+    )
 
 
 @router.get("/metrics", response_class=PlainTextResponse)

@@ -1,4 +1,5 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { apiRequest } from '../lib/apiClient'
 
 /**
  * Calendar Widget Component
@@ -7,112 +8,224 @@ import { useState, useMemo } from 'react'
  * Responsive: adapts to widget container
  */
 export default function CalendarWidget() {
-  const [events, setEvents] = useState([
-    {
-      id: 1,
-      title: 'Team Standup',
-      start: '09:00',
-      end: '09:30',
-      color: 'purple',
-    },
-    {
-      id: 2,
-      title: 'Client Call',
-      start: '11:00',
-      end: '12:00',
-      color: 'blue',
-    },
-    {
-      id: 3,
-      title: 'Lunch Break',
-      start: '13:00',
-      end: '14:00',
-      color: 'green',
-    },
-    {
-      id: 4,
-      title: 'Design Review',
-      start: '15:00',
-      end: '16:00',
-      color: 'indigo',
-    },
-  ])
-
   const now = new Date()
-  const currentTime = now.getHours() * 60 + now.getMinutes()
+  const [events, setEvents] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [freeSlots, setFreeSlots] = useState([])
+  const [showFreeSlots, setShowFreeSlots] = useState(false)
+  const [loadingSlots, setLoadingSlots] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
-  const timeSlots = useMemo(() => {
-    const slots = []
-    for (let hour = 8; hour < 18; hour++) {
-      slots.push({
-        time: `${String(hour).padStart(2, '0')}:00`,
-        hour,
-      })
+  useEffect(() => {
+    let isMounted = true
+
+    const loadSchedule = async () => {
+      setIsLoading(true)
+      setError('')
+
+      const today = new Date().toISOString().slice(0, 10)
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+
+      try {
+        const payload = await apiRequest('/api/v1/calendar/daily-schedule', {
+          method: 'POST',
+          body: JSON.stringify({ date: today, timezone }),
+        })
+
+        const apiEvents = Array.isArray(payload?.events)
+          ? payload.events
+          : Array.isArray(payload?.data?.events)
+            ? payload.data.events
+            : []
+
+        if (!isMounted) {
+          return
+        }
+
+        setEvents(apiEvents)
+      } catch (loadError) {
+        if (!isMounted) {
+          return
+        }
+
+        const message = loadError instanceof Error ? loadError.message : 'Unable to load calendar events.'
+        setError(message)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
     }
-    return slots
+
+    loadSchedule()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
-  const getEventColor = (color) => {
-    const colors = {
-      purple: 'bg-purple-500/20 border-purple-500 text-purple-300',
-      blue: 'bg-blue-500/20 border-blue-500 text-blue-300',
-      green: 'bg-green-500/20 border-green-500 text-green-300',
-      indigo: 'bg-indigo-500/20 border-indigo-500 text-indigo-300',
+  const loadFreeSlots = async () => {
+    setLoadingSlots(true)
+    setError('')
+
+    try {
+      const today = new Date().toISOString().slice(0, 10)
+      const payload = await apiRequest('/api/v1/calendar/free-slots', {
+        method: 'POST',
+        body: JSON.stringify({ date: today, min_duration_minutes: 30 }),
+      })
+
+      const slots = Array.isArray(payload?.free_slots) ? payload.free_slots : []
+      setFreeSlots(slots)
+      setShowFreeSlots(true)
+      if (slots.length === 0) {
+        setSuccessMessage('No free slots available today')
+        setTimeout(() => setSuccessMessage(''), 3000)
+      }
+    } catch (slotError) {
+      const message = slotError instanceof Error ? slotError.message : 'Failed to load free slots'
+      setError(message)
+    } finally {
+      setLoadingSlots(false)
     }
-    return colors[color] || colors.purple
   }
 
+  const currentTime = now.getHours() * 60 + now.getMinutes()
+
+  const displayEvents = useMemo(
+    () => events.map((event, index) => {
+      const startDate = new Date(event.start_time)
+      const endDate = new Date(event.end_time)
+
+      return {
+        id: event.id || `${index}-${event.title}`,
+        title: event.title || 'Untitled event',
+        start: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        end: endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        startMinutes: (startDate.getHours() * 60) + startDate.getMinutes(),
+        endMinutes: (endDate.getHours() * 60) + endDate.getMinutes(),
+      }
+    }),
+    [events],
+  )
+
   return (
-    <article className="glass rounded-lg p-6 border border-white/10">
+    <article className="glass rounded-xl border border-white/10 p-5">
       {/* Header */}
-      <h2 className="text-lg font-bold text-text-primary mb-4">Today's Schedule</h2>
+      <div className="mb-3">
+        <h3 className="text-base font-semibold text-text-primary">Today&apos;s schedule</h3>
+        <p className="text-xs text-text-secondary">Focus on the next confirmed blocks.</p>
+      </div>
 
       {/* Current time indicator */}
-      <div className="text-xs text-text-secondary mb-3">
+      <div className="mb-3 text-xs text-text-secondary">
         {now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
       </div>
 
+      {error && (
+        <p className="mb-3 rounded-lg border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs text-red-100" role="alert">
+          {error}
+        </p>
+      )}
+
+      {successMessage && (
+        <p className="mb-3 rounded-lg border border-green-300/20 bg-green-500/10 px-3 py-2 text-xs text-green-100" role="status">
+          ✓ {successMessage}
+        </p>
+      )}
+
       {/* Compact Schedule View */}
-      <div className="space-y-1" role="list" aria-label="Today's events">
-        {events.map((event) => {
-          const [startHour, startMin] = event.start.split(':').map(Number)
-          const eventMinutes = startHour * 60 + startMin
-          const isCurrentEvent = currentTime >= eventMinutes && currentTime < (startHour * 60 + (startMin + 60))
+      {isLoading ? (
+        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-5 text-center animate-fade-in">
+          <p className="text-sm font-semibold text-text-primary">Loading schedule...</p>
+        </div>
+      ) : displayEvents.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-white/20 bg-white/5 px-4 py-5 text-center animate-fade-in">
+          <p className="text-sm font-semibold text-text-primary">No meetings scheduled</p>
+          <p className="mt-1 text-xs text-text-secondary">
+            You have a clear calendar window right now.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-1" role="list" aria-label="Today's events">
+          {displayEvents.map((event) => {
+            const isCurrentEvent = currentTime >= event.startMinutes && currentTime < event.endMinutes
 
-          return (
-            <div
-              key={event.id}
-              className={`
-                min-h-11 flex items-center gap-2 px-3 py-2 rounded text-sm
-                transition-all ${getEventColor(event.color)} border
-                ${isCurrentEvent ? 'ring-2 ring-secondary/50 glow' : ''}
-              `}
-              role="listitem"
-              aria-label={`${event.title} from ${event.start} to ${event.end}`}
-            >
-              <time className="font-mono font-semibold flex-shrink-0 w-12">
-                {event.start}
-              </time>
-              <span className="flex-1 truncate">{event.title}</span>
-              {isCurrentEvent && (
-                <span className="text-xs font-bold animate-pulse">●</span>
-              )}
+            return (
+              <div
+                key={event.id}
+                className={`
+                  min-h-11 flex items-center gap-2 rounded border px-3 py-2 text-sm
+                  transition-all bg-blue-500/15 border-blue-400/40 text-blue-100
+                  ${isCurrentEvent ? 'ring-2 ring-secondary/50 glow' : ''}
+                `}
+                role="listitem"
+                aria-label={`${event.title} from ${event.start} to ${event.end}`}
+              >
+                <time className="w-12 flex-shrink-0 font-mono font-semibold">
+                  {event.start}
+                </time>
+                <span className="flex-1 truncate">{event.title}</span>
+                {isCurrentEvent && (
+                  <span className="text-xs font-bold animate-pulse">Now</span>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Free Slots Section */}
+      {showFreeSlots && (
+        <div className="mt-4 pt-4 border-t border-white/10 space-y-2">
+          <p className="text-xs font-semibold text-text-primary">Available slots:</p>
+          {loadingSlots ? (
+            <p className="text-xs text-text-secondary">Loading...</p>
+          ) : freeSlots.length === 0 ? (
+            <p className="text-xs text-text-tertiary">No free slots available</p>
+          ) : (
+            <div className="space-y-1">
+              {freeSlots.slice(0, 3).map((slot, idx) => (
+                <p key={idx} className="text-xs text-text-secondary">
+                  {slot.start_time && new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
+                  {slot.end_time && new Date(slot.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              ))}
             </div>
-          )
-        })}
-      </div>
+          )}
+        </div>
+      )}
 
-      {/* View full calendar link */}
-      <button
-        className="
-          touch-target mt-4 w-full text-center text-sm text-secondary hover:text-secondary/80
-          py-2 rounded transition-colors focus-visible:outline-none
-          focus-visible:ring-2 focus-visible:ring-secondary
-        "
-        aria-label="View full calendar"
-      >
-        View calendar →
-      </button>
+      {/* Action Buttons */}
+      <div className="mt-4 flex gap-2">
+        <button
+          type="button"
+          onClick={loadFreeSlots}
+          disabled={loadingSlots}
+          className="
+            touch-target flex-1 text-center text-xs font-semibold
+            rounded border border-secondary/30 bg-secondary/10 text-secondary
+            hover:bg-secondary/20 disabled:opacity-50 transition-colors
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
+          "
+          aria-label="Find free slots"
+        >
+          {loadingSlots ? '...' : 'Find free slots'}
+        </button>
+        <button
+          type="button"
+          className="
+            touch-target flex-1 text-center text-xs font-semibold
+            rounded border border-white/15 bg-white/5 text-text-secondary
+            hover:bg-white/10 transition-colors
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
+          "
+          aria-label="View full calendar"
+        >
+          View calendar →
+        </button>
+      </div>
     </article>
   )
 }

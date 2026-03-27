@@ -44,13 +44,46 @@ def create_calendar_tools(db: Session):
         user_id: str,
         date: Optional[str] = None,
         min_duration_minutes: int = 30,
+        time: Optional[str] = None,
+        **_: Any,
     ) -> Dict[str, Any]:
         start = perf_counter()
         trace_id = get_trace_id() or "N/A"
 
         try:
-            date_value = _parse_datetime(f"{date}T00:00:00") if date else datetime.utcnow()
+            date_value = datetime.utcnow()
+            if date:
+                try:
+                    date_value = _parse_datetime(f"{date}T00:00:00") if "T" not in date else _parse_datetime(date)
+                except Exception:
+                    # Fall back to current day when planner sends non-ISO date strings.
+                    date_value = datetime.utcnow()
+
+            time_hint = (time or "").strip().lower()
+            if "tomorrow" in time_hint:
+                date_value = datetime.utcnow() + timedelta(days=1)
+            elif "today" in time_hint:
+                date_value = datetime.utcnow()
+
             slots = repo.get_user_free_slots(user_id, date_value, min_duration_minutes=min_duration_minutes)
+
+            if time_hint:
+                if "morning" in time_hint:
+                    slots = [
+                        slot for slot in slots
+                        if slot["start"].hour < 12 and slot["end"].hour > 6
+                    ]
+                elif "afternoon" in time_hint:
+                    slots = [
+                        slot for slot in slots
+                        if slot["start"].hour < 18 and slot["end"].hour >= 12
+                    ]
+                elif "evening" in time_hint:
+                    slots = [
+                        slot for slot in slots
+                        if slot["end"].hour >= 18
+                    ]
+
             response = {
                 "status": "success",
                 "count": len(slots),

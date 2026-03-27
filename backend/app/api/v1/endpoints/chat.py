@@ -17,6 +17,52 @@ from app.db.models import User
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not value or not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+def _provider_status(user: User) -> dict[str, Any]:
+    preferences = user.preferences or {}
+
+    gmail_connected = bool(preferences.get("gmail_connected") and preferences.get("gmail_access_token"))
+    gmail_expiry = preferences.get("gmail_token_expires_at")
+    gmail_status = "connected"
+    if not gmail_connected:
+        gmail_status = "disconnected"
+    elif isinstance(gmail_expiry, (int, float)) and datetime.utcfromtimestamp(gmail_expiry) <= datetime.utcnow():
+        gmail_status = "expired"
+
+    calendar_tokens = preferences.get("calendar_oauth_tokens") or {}
+    calendar_access_token = calendar_tokens.get("access_token")
+    calendar_expiry = _parse_iso_datetime(calendar_tokens.get("expires_at"))
+    calendar_status = "connected"
+    if not calendar_access_token:
+        calendar_status = "disconnected"
+    elif calendar_expiry and calendar_expiry <= datetime.utcnow():
+        calendar_status = "expired"
+
+    return {
+        "gmail": {
+            "connected": gmail_status == "connected",
+            "status": gmail_status,
+            "connect_path": "/api/v1/emails/oauth/authorize-url",
+        },
+        "calendar": {
+            "connected": calendar_status == "connected",
+            "status": calendar_status,
+            "connect_path": "/api/v1/calendar/oauth-authorize",
+        },
+    }
+
+
 async def get_current_user_from_db(
     current_token: TokenPayload = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -48,15 +94,26 @@ async def process_chat_message(
         session_id=session_id,
     )
 
+    provider_status = _provider_status(current_user)
+    response_message = state.response.message if state.response else ""
+    failed_errors = " ".join((item.error or "").lower() for item in state.tool_results if not item.success)
+    if any(term in failed_errors for term in ["gmail", "calendar", "token", "oauth", "expired"]):
+        response_message = (
+            f"{response_message}\n\n"
+            f"Connection status -> Gmail: {provider_status['gmail']['status']}, "
+            f"Calendar: {provider_status['calendar']['status']}."
+        )
+
     return {
         "success": True,
-        "message": state.response.message if state.response else "",
+        "message": response_message,
         "response": state.response.model_dump(mode="json") if state.response else None,
         "trace_id": state.trace_id,
         "conversation_id": session_id,
         "approval_required": state.pending_approval is not None,
         "approval_id": state.pending_approval.approval_id if state.pending_approval else None,
         "tool_results": [item.model_dump(mode="json") for item in state.tool_results],
+        "provider_status": provider_status,
         "timestamp": datetime.utcnow().isoformat(),
     }
 

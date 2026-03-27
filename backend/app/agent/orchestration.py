@@ -86,7 +86,20 @@ class AgentOrchestrator:
         if self._run_planner_with_llm(state):
             return
 
-        self._run_planner_with_rules(state)
+        logger.warning(
+            "orchestration.planner.llm_failed_no_fallback",
+            extra={"trace_id": state.trace_id, "user_id": state.user_id},
+        )
+        state.plan = PlannerOutput(
+            action_type=PlannerDecision.CHAT_RESPONSE,
+            reasoning="Unable to determine intent from LLM. Responding conversationally.",
+            tools_required=[],
+            requires_approval=False,
+            confidence=0.5,
+            estimated_duration_seconds=1.0,
+        )
+        state.current_node = "planner"
+        state.metadata.nodes_executed.append("planner")
 
     def _run_planner_with_llm(self, state: AgentState) -> bool:
         if not self._planner_llm:
@@ -109,20 +122,31 @@ class AgentOrchestrator:
         ]
 
         prompt = (
-            "You are an intent planner for an AI assistant. "
-            "Read the user's message and return ONLY valid JSON with this schema:\n"
+            "You are an expert intent planner for an AI assistant. Your task is to understand the semantic intent "
+            "of user messages and determine the best action and tools to execute.\n\n"
+            "INTENT UNDERSTANDING (not keyword matching):\n"
+            "- User wants to review/send emails: INTENT = email operations\n"
+            "- User wants to check calendar/see free slots/schedule meeting: INTENT = calendar operations\n"
+            "- User wants to create/update/complete tasks: INTENT = task management\n"
+            "- User needs help planning/organizing: INTENT = planning\n"
+            "- Otherwise: INTENT = conversational response\n\n"
+            "Return ONLY valid JSON with this schema:\n"
             "{\n"
-            "  \"action_type\": string,\n"
-            "  \"reasoning\": string,\n"
-            "  \"requires_approval\": boolean,\n"
+            "  \"action_type\": string (one of the allowed values),\n"
+            "  \"reasoning\": string (explain your semantic understanding),\n"
+            "  \"requires_approval\": boolean (true if action modifies data),\n"
             "  \"approval_reason\": string|null,\n"
-            "  \"confidence\": number,\n"
+            "  \"confidence\": number (0-1, 1=certain),\n"
             "  \"tools_required\": [{\"tool_name\": string, \"parameters\": object}]\n"
-            "}\n"
-            f"Allowed action_type values: {supported_actions}.\n"
-            f"Allowed tool_name values: {supported_tools}.\n"
-            "Treat 'mail' and 'mails' as email intents.\n"
-            "If no tool is needed, return an empty tools_required array and action_type=chat_response.\n"
+            "}\n\n"
+            f"Allowed action_type values: {supported_actions}\n"
+            f"Allowed tool_name values: {supported_tools}\n\n"
+            "RULES:\n"
+            "1. Base decisions on semantic intent, not keywords\n"
+            "2. If tools_required is empty, set action_type=chat_response\n"
+            "3. Always include a reasoning field explaining what the user is trying to accomplish\n"
+            "4. Return valid JSON even if you're unsure - use confidence field\n"
+            "5. If message is unclear, use chat_response action\n\n"
             f"User message: {state.user_input.content or ''}"
         )
 
@@ -200,86 +224,6 @@ class AgentOrchestrator:
             raw_content = "\n".join(lines).strip()
         return json.loads(raw_content)
 
-    def _run_planner_with_rules(self, state: AgentState) -> None:
-        message = (state.user_input.content or "").lower()
-        tools: list[ToolRequirement] = []
-        decision = PlannerDecision.CHAT_RESPONSE
-        requires_approval = False
-        reasoning = "Respond directly without external tool calls."
-
-        if any(keyword in message for keyword in ["email", "emails", "mail", "mails", "inbox"]):
-            if "draft" in message or "reply" in message:
-                decision = PlannerDecision.EMAIL_DRAFT
-                tools = [ToolRequirement(tool_name="generate_draft_reply", parameters={"email_id": "latest", "tone": "professional"})]
-                requires_approval = True
-                reasoning = "User asked for an email draft."
-            elif "urgent" in message:
-                decision = PlannerDecision.EMAIL_SUMMARY
-                tools = [ToolRequirement(tool_name="check_urgent_emails", parameters={})]
-                reasoning = "User asked for urgent email context."
-            else:
-                decision = PlannerDecision.EMAIL_SUMMARY
-                tools = [
-                    ToolRequirement(tool_name="fetch_latest_emails", parameters={"limit": 10}),
-                    ToolRequirement(tool_name="summarize_inbox", parameters={"limit": 10}),
-                ]
-                reasoning = "User asked about email status."
-        elif "plan" in message and ("day" in message or "today" in message):
-            decision = PlannerDecision.DAILY_PLAN
-            tools = [ToolRequirement(tool_name="generate_daily_plan", parameters={})]
-            reasoning = "User asked for a daily plan."
-        elif "task" in message or "todo" in message:
-            if "create" in message or "add" in message:
-                decision = PlannerDecision.CREATE_TASK
-                tools = [ToolRequirement(tool_name="create_task", parameters={"title": state.user_input.content or "New task", "priority": "medium"})]
-                reasoning = "User asked to create a task."
-            elif "update" in message or "move" in message:
-                decision = PlannerDecision.UPDATE_TASK
-                tools = [ToolRequirement(tool_name="list_tasks", parameters={"limit": 5})]
-                reasoning = "User asked to update tasks; listing first for safe follow-up."
-            else:
-                decision = PlannerDecision.TASK_LIST
-                tools = [ToolRequirement(tool_name="list_tasks", parameters={"limit": 20})]
-                reasoning = "User asked for task status."
-        elif "calendar" in message or "meeting" in message or "schedule" in message:
-            if "create" in message or "schedule" in message:
-                decision = PlannerDecision.CREATE_EVENT
-                requires_approval = True
-                now = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
-                end = now + timedelta(hours=1)
-                tools = [
-                    ToolRequirement(
-                        tool_name="create_event",
-                        parameters={
-                            "title": "AI Scheduled Meeting",
-                            "start_time": now.isoformat(),
-                            "end_time": end.isoformat(),
-                            "description": state.user_input.content,
-                            "require_approval": True,
-                        },
-                    )
-                ]
-                reasoning = "User requested scheduling action requiring approval."
-            elif "free" in message or "slot" in message:
-                decision = PlannerDecision.FREE_SLOTS_CHECK
-                tools = [ToolRequirement(tool_name="list_free_slots", parameters={"min_duration_minutes": 30})]
-                reasoning = "User requested available time slots."
-            else:
-                decision = PlannerDecision.FREE_SLOTS_CHECK
-                tools = [ToolRequirement(tool_name="find_best_slot", parameters={"duration_minutes": 30})]
-                reasoning = "User asked calendar availability question."
-
-        state.plan = PlannerOutput(
-            action_type=decision,
-            reasoning=reasoning,
-            tools_required=tools,
-            requires_approval=requires_approval,
-            approval_reason="Sensitive action requires explicit confirmation." if requires_approval else None,
-            confidence=0.82,
-            estimated_duration_seconds=2.0,
-        )
-        state.current_node = "planner"
-        state.metadata.nodes_executed.append("planner")
 
     def _run_router(self, state: AgentState) -> None:
         tool_names = [tool.tool_name for tool in (state.plan.tools_required if state.plan else [])]
@@ -300,10 +244,13 @@ class AgentOrchestrator:
             params = dict(requirement.parameters)
 
             if params.get("email_id") == "latest":
-                latest = tools["fetch_latest_emails"](user_id=user.id, limit=1)
-                emails = latest.get("emails", [])
-                if not emails:
+                latest_raw = tools["fetch_latest_emails"](user_id=user.id, limit=1)
+                latest = self._normalize_tool_result("fetch_latest_emails", latest_raw)
+                emails = latest.get("emails", []) if isinstance(latest.get("emails", []), list) else []
+                if latest.get("status") != "success" or not emails:
                     result = {"status": "failed", "error": "No recent emails found"}
+                    if latest.get("status") != "success" and latest.get("error"):
+                        result["error"] = latest.get("error")
                     state.tool_results.append(
                         ToolExecutionResult(
                             tool_name=tool_name,
@@ -321,7 +268,8 @@ class AgentOrchestrator:
                 if not tool_fn:
                     result = {"status": "failed", "error": f"Unknown tool: {tool_name}"}
                 else:
-                    result = tool_fn(user_id=user.id, **params)
+                    raw_result = tool_fn(user_id=user.id, **params)
+                    result = self._normalize_tool_result(tool_name, raw_result)
 
                 success = result.get("status") == "success"
                 error_text = result.get("error")
@@ -350,6 +298,34 @@ class AgentOrchestrator:
 
         state.current_node = "tools"
         state.metadata.nodes_executed.append("tools")
+
+    @staticmethod
+    def _normalize_tool_result(tool_name: str, raw_result: Any) -> dict[str, Any]:
+        """Convert tool outputs into a consistent payload shape for downstream handling."""
+        if not isinstance(raw_result, dict):
+            return {
+                "status": "failed",
+                "error": f"Unexpected result type from {tool_name}: {type(raw_result).__name__}",
+                "raw_result": raw_result,
+            }
+
+        result = dict(raw_result)
+        status = str(result.get("status", "")).lower()
+
+        if status in {"success", "failed"}:
+            return result
+
+        if result.get("success") is True:
+            result["status"] = "success"
+            return result
+
+        if result.get("error"):
+            result["status"] = "failed"
+            return result
+
+        result["status"] = "failed"
+        result["error"] = result.get("error") or "Tool returned an unrecognized payload"
+        return result
 
     def _capture_pending_approval(self, state: AgentState, user: User, tool_name: str, result: dict) -> None:
         approval_id = result.get("approval_id")

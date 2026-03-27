@@ -121,18 +121,19 @@ async def google_oauth_callback_bridge(
                 ),
             )
 
-        if user.preferences is None:
-            user.preferences = {}
-
-        user.preferences["calendar_oauth_tokens"] = {
+        preferences = dict(user.preferences or {})
+        existing_tokens = dict(preferences.get("calendar_oauth_tokens") or {})
+        preferences["calendar_oauth_tokens"] = {
             "access_token": tokens.get("access_token"),
-            "refresh_token": tokens.get("refresh_token"),
+            "refresh_token": tokens.get("refresh_token") or existing_tokens.get("refresh_token"),
             "expires_at": (
                 datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
             ).isoformat(),
         }
+        preferences["calendar_connected"] = True
+        user.preferences = preferences
         user.oauth_provider = "google"
-        user_repo.update(user)
+        db.add(user)
         db.commit()
 
         logger.info("Google Calendar connected for user %s", user.id)

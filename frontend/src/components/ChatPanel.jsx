@@ -1,8 +1,5 @@
-import { useState, useRef, useEffect } from 'react'
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
-const ENV_API_TOKEN = import.meta.env.VITE_API_TOKEN || ''
-const DEV_TOKEN_ENDPOINT = `${API_BASE_URL}/api/v1/health/dev/token`
+import { useEffect, useRef, useState } from 'react'
+import { apiRequest } from '../lib/apiClient'
 
 function createMessage(type, text) {
   return {
@@ -14,6 +11,23 @@ function createMessage(type, text) {
   }
 }
 
+function formatProviderStatus(providerStatus) {
+  if (!providerStatus || typeof providerStatus !== 'object') {
+    return ''
+  }
+
+  const gmail = providerStatus.gmail?.status || 'unknown'
+  const calendar = providerStatus.calendar?.status || 'unknown'
+  return `Connection status: Gmail ${gmail}, Calendar ${calendar}.`
+}
+
+const REQUEST_STATE = {
+  IDLE: 'idle',
+  LOADING: 'loading',
+  SUCCESS: 'success',
+  ERROR: 'error',
+}
+
 /**
  * Chat Panel Component
  * Features: chat bubbles (user/AI), typing animation, suggested prompts
@@ -21,21 +35,22 @@ function createMessage(type, text) {
  * Responsive: adapts to mobile/tablet/desktop
  */
 export default function ChatPanel() {
-  const [messages, setMessages] = useState([
-    createMessage('ai', 'Good morning! I\'ve analyzed your inbox and calendar. Ready for your daily briefing?'),
-  ])
+  const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
+  const [requestState, setRequestState] = useState(REQUEST_STATE.IDLE)
+  const [errorNotice, setErrorNotice] = useState('')
   const [liveAnnouncement, setLiveAnnouncement] = useState('')
+  const [toastMessage, setToastMessage] = useState('')
   const messagesEndRef = useRef(null)
   const scrollContainerRef = useRef(null)
   const conversationIdRef = useRef(crypto.randomUUID())
+  const toastTimerRef = useRef(null)
 
   const suggestedPrompts = [
-    'Summarize emails',
+    'Check my inbox highlights',
     'Plan my day',
     'Show urgent tasks',
-    'Check calendar',
+    'Find free slots tomorrow morning',
   ]
 
   // Auto-scroll to latest message
@@ -51,97 +66,88 @@ export default function ChatPanel() {
     }
   }, [messages])
 
-  const getAuthToken = async () => {
-    const localToken = window.localStorage.getItem('ai_assistant_token')
-    if (localToken) {
-      return localToken
-    }
-
-    if (ENV_API_TOKEN) {
-      return ENV_API_TOKEN
-    }
-
-    try {
-      const response = await fetch(DEV_TOKEN_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        return ''
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current)
       }
-
-      const payload = await response.json()
-      const issuedToken = payload?.data?.token || payload?.token || ''
-
-      if (issuedToken) {
-        window.localStorage.setItem('ai_assistant_token', issuedToken)
-      }
-
-      return issuedToken
-    } catch {
-      return ''
     }
-  }
+  }, [])
+
+  const isLoading = requestState === REQUEST_STATE.LOADING
 
   const handleSendMessage = async () => {
     const trimmedInput = input.trim()
-    if (!trimmedInput || isTyping) return
+    if (!trimmedInput || isLoading) return
 
     setMessages(prev => [...prev, createMessage('user', trimmedInput)])
     setInput('')
-    setIsTyping(true)
+    setRequestState(REQUEST_STATE.LOADING)
+    setErrorNotice('')
+    setToastMessage('Sending request to assistant...')
 
     try {
-      const token = await getAuthToken()
-      const headers = {
-        'Content-Type': 'application/json',
-      }
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/v1/chat/messages`, {
+      const data = await apiRequest('/api/v1/chat/messages', {
         method: 'POST',
-        headers,
         body: JSON.stringify({
           message: trimmedInput,
           conversation_id: conversationIdRef.current,
         }),
       })
-
-      if (!response.ok) {
-        let errorMessage = `Chat request failed (${response.status})`
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.message || errorData.detail || errorData.error || errorMessage
-        } catch {
-          // Keep fallback message when response body is not JSON.
-        }
-
-        if (response.status === 401 || response.status === 403) {
-          errorMessage = 'Authentication required. The UI could not obtain a token automatically. Set localStorage key "ai_assistant_token" with a valid JWT or configure VITE_API_TOKEN.'
-        }
-
-        throw new Error(errorMessage)
-      }
-
-      const data = await response.json()
       let assistantText = data.message || data.response?.message || 'Request completed.'
 
-      if (data.approval_required && data.approval_id) {
-        assistantText += `\n\nApproval requested: ${data.approval_id}`
+      const providerStatusText = formatProviderStatus(data.provider_status)
+      if (providerStatusText) {
+        assistantText += `\n\n${providerStatusText}`
       }
 
-      setMessages(prev => [...prev, createMessage('ai', assistantText)])
+      // Build AI message with additional data
+      const aiMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        type: 'ai',
+        text: assistantText,
+        timestamp: new Date(),
+        isComplete: true,
+        actionCards: data.response?.action_cards || [],
+        toolResults: data.tool_results || [],
+      }
+
+      // Show approval request if needed
+      if (data.approval_required && data.approval_id) {
+        aiMessage.actionCards.push({
+          id: `approval-${data.approval_id}`,
+          label: '✓ Approve',
+          action: 'approve',
+          payload: { approval_id: data.approval_id },
+        })
+        aiMessage.actionCards.push({
+          id: `reject-${data.approval_id}`,
+          label: '✕ Reject',
+          action: 'reject',
+          payload: { approval_id: data.approval_id },
+        })
+      }
+
+      setMessages(prev => [...prev, aiMessage])
+      setRequestState(REQUEST_STATE.SUCCESS)
+      setToastMessage('Response received successfully.')
+
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current)
+      }
+
+      toastTimerRef.current = window.setTimeout(() => {
+        setRequestState(REQUEST_STATE.IDLE)
+        setToastMessage('')
+      }, 1800)
     } catch (error) {
       const errorText = error instanceof Error ? error.message : 'Failed to reach backend chat service.'
-      setMessages(prev => [...prev, createMessage('ai', `I could not reach the backend: ${errorText}`)])
-    } finally {
-      setIsTyping(false)
+      const assistantError = `I could not reach the backend: ${errorText}`
+
+      setMessages(prev => [...prev, createMessage('ai', assistantError)])
+      setRequestState(REQUEST_STATE.ERROR)
+      setErrorNotice(assistantError)
+      setToastMessage('Message failed. Review error details and retry.')
     }
   }
 
@@ -149,19 +155,78 @@ export default function ChatPanel() {
     setInput(prompt)
   }
 
+  const clearConversation = () => {
+    setMessages([])
+    setErrorNotice('')
+    setRequestState(REQUEST_STATE.IDLE)
+    setToastMessage('Conversation cleared.')
+    conversationIdRef.current = crypto.randomUUID()
+  }
+
+  const statusChipClasses = {
+    [REQUEST_STATE.IDLE]: 'border-white/15 text-text-secondary bg-white/5',
+    [REQUEST_STATE.LOADING]: 'border-sky-300/30 text-sky-200 bg-sky-500/10',
+    [REQUEST_STATE.SUCCESS]: 'border-emerald-300/30 text-emerald-200 bg-emerald-500/10',
+    [REQUEST_STATE.ERROR]: 'border-red-300/30 text-red-200 bg-red-500/10',
+  }
+
+  const statusText = {
+    [REQUEST_STATE.IDLE]: 'Idle',
+    [REQUEST_STATE.LOADING]: 'Loading',
+    [REQUEST_STATE.SUCCESS]: 'Success',
+    [REQUEST_STATE.ERROR]: 'Error',
+  }
+
   return (
-    <section
-      className="flex flex-col flex-1 h-1/2 md:h-auto p-4 md:p-6 gap-4 overflow-hidden"
+    <article
+      className="glass flex h-full min-h-[24rem] flex-col gap-4 rounded-xl border border-white/10 p-4 md:p-5"
       aria-label="Chat panel"
     >
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {liveAnnouncement}
       </p>
 
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {toastMessage}
+      </div>
+
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+        <div>
+          <h2 className="text-base font-semibold md:text-lg">Assistant chat</h2>
+          <p className="text-xs text-text-secondary md:text-sm">
+            Ask for inbox summaries, planning help, and schedule checks.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${statusChipClasses[requestState]}`}
+            role="status"
+            aria-live="polite"
+          >
+            {statusText[requestState]}
+          </span>
+          <button
+            type="button"
+            onClick={clearConversation}
+            className="touch-target rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-semibold text-text-secondary hover:bg-white/10 hover:text-text-primary"
+            aria-label="Clear conversation"
+          >
+            Clear
+          </button>
+        </div>
+      </header>
+
+      {errorNotice && (
+        <div className="rounded-lg border border-red-300/25 bg-red-500/10 px-3 py-2 text-xs text-red-100" role="alert">
+          <p className="font-semibold">Connection issue</p>
+          <p className="mt-1 leading-relaxed">{errorNotice}</p>
+        </div>
+      )}
+
       {/* Chat Container with Messages */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto flex flex-col gap-4 mb-4 chat-container"
+        className="chat-container flex-1 overflow-y-auto"
         role="log"
         aria-label="Chat messages"
         aria-live="off"
@@ -169,37 +234,48 @@ export default function ChatPanel() {
         aria-relevant="additions text"
       >
         {messages.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center">
-            <div className="text-6xl animate-scale-pop">🧠</div>
-            <h2 className="text-2xl font-bold text-text-primary">Welcome to Astra</h2>
-            <p className="text-text-secondary max-w-xs">
-              Your intelligent assistant for managing emails, calendar, and tasks.
+          <div className="flex h-full min-h-[14rem] flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-white/20 bg-white/5 px-5 text-center animate-fade-in">
+            <h3 className="text-lg font-semibold text-text-primary">Start your first prompt</h3>
+            <p className="max-w-sm text-sm text-text-secondary">
+              No messages yet. Use one of the starter prompts below or type your own request.
             </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              {suggestedPrompts.map(prompt => (
+                <button
+                  type="button"
+                  key={`empty-${prompt}`}
+                  onClick={() => handleSuggestedPrompt(prompt)}
+                  className="touch-target rounded-full border border-white/20 bg-white/5 px-3 py-2 text-xs text-text-secondary hover:border-secondary/50 hover:text-secondary"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
             {messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
             ))}
-            {isTyping && <TypingIndicator />}
+            {isLoading && <TypingIndicator />}
           </>
         )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Suggested Prompts (shown when input is empty) */}
-      {input === '' && messages.length <= 1 && (
+      {input === '' && messages.length > 0 && (
         <div className="flex flex-col gap-2 mb-4 animate-fade-in">
           <p className="text-xs text-text-secondary font-medium">SUGGESTED</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {suggestedPrompts.map((prompt) => (
               <button
+                type="button"
                 key={prompt}
                 onClick={() => handleSuggestedPrompt(prompt)}
                 className="
-                  touch-target px-4 py-2 rounded-lg text-sm font-medium
-                  glass hover:bg-white/10 hover:shadow-glow hover:scale-105
-                  text-text-secondary hover:text-secondary
+                  touch-target rounded-lg border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium
+                  text-text-secondary hover:border-secondary/40 hover:text-secondary
                   transition-all duration-200
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
                 "
@@ -212,15 +288,15 @@ export default function ChatPanel() {
       )}
 
       {/* Input Bar */}
-      <div className="flex gap-3 items-center">
+      <div className="flex flex-col gap-3 border-t border-white/10 pt-3 sm:flex-row sm:items-center">
         <input
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-          placeholder="Ask me anything..."
+          placeholder="Ask me to summarize mail, plan your day, or check your calendar..."
           className="
-            flex-1 px-4 py-3 rounded-lg glass
+            flex-1 rounded-lg border border-white/15 bg-white/5 px-4 py-3
             text-text-primary placeholder-text-tertiary
             focus:outline-none focus:ring-2 focus:ring-secondary focus:ring-offset-2
             focus:ring-offset-background-DEFAULT
@@ -229,40 +305,62 @@ export default function ChatPanel() {
           aria-label="Chat input"
         />
         <button
+          type="button"
           onClick={() => handleSendMessage()}
-          disabled={!input.trim()}
+          disabled={!input.trim() || isLoading}
           className="
-            touch-target p-3 rounded-lg gradient-primary hover:glow-lg hover:scale-110
-            text-white font-medium transition-all duration-200 active:scale-95
+            touch-target rounded-lg gradient-primary px-4 py-3 text-white font-medium transition-all duration-200
+            hover:glow-lg
             disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100
             focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
           "
-          aria-label="Send message"
+          aria-label={isLoading ? 'Sending message' : 'Send message'}
         >
-          →
-        </button>
-        <button
-          className="
-            touch-target p-3 rounded-lg glass hover:bg-white/10 hover:scale-110 transition-all duration-200 active:scale-95
-            text-text-secondary hover:text-secondary
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
-          "
-          aria-label="Send voice message"
-        >
-          🎤
+          {isLoading ? 'Sending...' : 'Send'}
         </button>
       </div>
-    </section>
+    </article>
   )
 }
 
 /**
  * Chat Bubble Component
- * Features: differentiates user/AI messages with styling and animation
+ * Features: differentiates user/AI messages with styling and animation, displays action cards
  * Accessibility: aria-label indicates message sender
  */
 function ChatBubble({ message }) {
   const isAI = message.type === 'ai'
+  const [actionResult, setActionResult] = useState(null)
+  const [isExecuting, setIsExecuting] = useState(null)
+
+  // Check if message contains action card data (from tool results)
+  const hasActionCards = message.actionCards && message.actionCards.length > 0
+  const toolResults = message.toolResults || []
+
+  const handleActionClick = async (action) => {
+    setIsExecuting(action.id)
+    try {
+      // Handle action execution (approve, reject, etc)
+      if (action.action === 'approve' && action.payload) {
+        await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/approve`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        })
+        setActionResult('✓ Approved successfully')
+      } else if (action.action === 'reject' && action.payload) {
+        await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/reject?reason=User+rejected+through+chat`, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        })
+        setActionResult('✗ Rejected')
+      }
+    } catch (error) {
+      setActionResult(`Action failed: ${error.message}`)
+    } finally {
+      setIsExecuting(null)
+      setTimeout(() => setActionResult(null), 3000)
+    }
+  }
 
   return (
     <div
@@ -271,27 +369,76 @@ function ChatBubble({ message }) {
       aria-label={`${isAI ? 'AI' : 'User'} message`}
     >
       {isAI && (
-        <div className="w-8 h-8 rounded-full bg-gradient-primary flex-shrink-0 flex items-center justify-center">
-          <span className="text-sm glow">🧠</span>
+        <div className="h-8 w-8 rounded-full bg-gradient-primary flex-shrink-0 flex items-center justify-center">
+          <span className="text-xs font-bold text-white">AI</span>
         </div>
       )}
-      <div
-        className={`
-          max-w-xs md:max-w-md px-4 py-3 rounded-lg
-          ${
-            isAI
-              ? 'glass bg-white/5 border border-secondary/20 text-text-primary'
-              : 'gradient-primary text-white'
-          }
-        `}
-      >
-        <p className="text-sm break-words">{message.text}</p>
-        <span className="text-xs opacity-70 mt-1 block">
-          {message.timestamp.toLocaleTimeString([], {
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        </span>
+      <div className="flex-1 flex flex-col gap-2">
+        <div
+          className={`
+            max-w-[84%] px-4 py-3 rounded-lg
+            ${
+              isAI
+                ? 'glass bg-white/5 border border-secondary/20 text-text-primary'
+                : 'gradient-primary text-white'
+            }
+          `}
+        >
+          <p className="text-sm break-words whitespace-pre-wrap">{message.text}</p>
+          <span className="text-xs opacity-70 mt-1 block">
+            {message.timestamp.toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </span>
+        </div>
+
+        {/* Tool Results Display */}
+        {toolResults.length > 0 && (
+          <div className="space-y-2 max-w-[84%]">
+            {toolResults.map((result, idx) => (
+              <div key={idx} className={`rounded-lg border px-3 py-2 text-xs ${
+                result.success
+                  ? 'border-green-300/20 bg-green-500/10 text-green-100'
+                  : 'border-red-300/20 bg-red-500/10 text-red-100'
+              }`}>
+                <p className="font-semibold">{result.tool_name}</p>
+                {result.success && result.result && (
+                  <p className="mt-1 opacity-90">{JSON.stringify(result.result).substring(0, 100)}...</p>
+                )}
+                {!result.success && result.error && (
+                  <p className="mt-1 opacity-90">{result.error}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Action Cards */}
+        {hasActionCards && (
+          <div className="space-y-2 max-w-[84%]">
+            {message.actionCards.map((card) => (
+              <button
+                key={card.id}
+                onClick={() => handleActionClick(card)}
+                disabled={isExecuting === card.id}
+                className="
+                  w-full text-left rounded-lg border border-secondary/40 bg-secondary/10 px-3 py-2
+                  font-semibold text-secondary hover:bg-secondary/20 disabled:opacity-50
+                  transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
+                "
+              >
+                {isExecuting === card.id ? 'Processing...' : card.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {actionResult && (
+          <div className="max-w-[84%] rounded-lg border border-green-300/20 bg-green-500/10 px-3 py-2 text-xs text-green-100">
+            {actionResult}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -310,8 +457,8 @@ function TypingIndicator() {
       aria-label="AI is typing"
       aria-live="polite"
     >
-      <div className="w-8 h-8 rounded-full bg-gradient-primary flex-shrink-0 flex items-center justify-center">
-        <span className="text-sm glow">🧠</span>
+      <div className="h-8 w-8 rounded-full bg-gradient-primary flex-shrink-0 flex items-center justify-center">
+        <span className="text-xs font-bold text-white">AI</span>
       </div>
       <div className="glass bg-white/5 border border-secondary/20 text-text-primary max-w-xs md:max-w-md px-4 py-3 rounded-lg">
         <div className="typing-indicator">

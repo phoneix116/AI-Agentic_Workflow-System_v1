@@ -62,29 +62,37 @@ class RateLimiter:
         current_time = datetime.utcnow().timestamp()
         window_start = current_time - 60  # 1 minute window
         
-        # Get all request times in the window
-        request_times = redis_client.zrange(limit_key, 0, -1, byscore=(window_start, current_time))
-        
-        # Check if limit exceeded
-        if len(request_times) >= limit:
+        try:
+            # Get all request times in the window
+            request_times = redis_client.zrange(limit_key, 0, -1, byscore=(window_start, current_time))
+
+            # Check if limit exceeded
+            if len(request_times) >= limit:
+                logger.warning(
+                    f"Rate limit exceeded",
+                    extra={
+                        "identifier": identifier,
+                        "path": path,
+                        "limit": limit,
+                        "requests_in_window": len(request_times),
+                    },
+                )
+                return False
+
+            # Add current request to window
+            redis_client.zadd(limit_key, {str(current_time): current_time})
+
+            # Set expiry to 2 minutes (cleanup after window passes)
+            redis_client.expire(limit_key, 120)
+
+            return True
+        except Exception as exc:
             logger.warning(
-                f"Rate limit exceeded",
-                extra={
-                    "identifier": identifier,
-                    "path": path,
-                    "limit": limit,
-                    "requests_in_window": len(request_times),
-                },
+                "rate_limit.redis_unavailable",
+                extra={"path": path, "identifier": identifier, "error": str(exc)},
             )
-            return False
-        
-        # Add current request to window
-        redis_client.zadd(limit_key, {str(current_time): current_time})
-        
-        # Set expiry to 2 minutes (cleanup after window passes)
-        redis_client.expire(limit_key, 120)
-        
-        return True
+            # Fail-open to keep API available when cache is degraded.
+            return True
 
 
 async def rate_limit_middleware(request: Request, call_next):

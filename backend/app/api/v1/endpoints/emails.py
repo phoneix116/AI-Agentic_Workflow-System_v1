@@ -48,13 +48,14 @@ async def get_current_user_from_db(
 @router.get("/oauth/authorize-url", summary="Get Gmail OAuth URL")
 async def get_oauth_url(
     state: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
 ) -> dict:
     """
     Get Google OAuth authorization URL for Gmail connection.
     
     User should be redirected to this URL to authorize Gmail access.
     """
-    service = EmailService(Session())
+    service = EmailService(db)
     auth_url = service.get_oauth_auth_url(state=state or str(uuid4()))
     return {"auth_url": auth_url}
 
@@ -63,6 +64,7 @@ async def get_oauth_url(
 async def oauth_callback(
     code: str,
     state: Optional[str] = None,
+    error: Optional[str] = None,
     current_user: User = Depends(get_current_user_from_db),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -71,6 +73,12 @@ async def oauth_callback(
     
     Called after user authorizes Gmail access on Google's consent screen.
     """
+    if error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Gmail OAuth failed: {error}",
+        )
+
     if not code:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

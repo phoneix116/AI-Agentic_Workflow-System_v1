@@ -40,6 +40,71 @@ logger = logging.getLogger(__name__)
 calendar_service = GoogleCalendarService()
 
 
+def _parse_oauth_expiry(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(pytz.UTC).replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
+
+
+async def _resolve_calendar_access_token(user: User, db: Session) -> str:
+    if not user.preferences:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google Calendar not connected. Please authorize first.",
+        )
+
+    preferences = dict(user.preferences or {})
+    tokens_data = dict(preferences.get("calendar_oauth_tokens") or {})
+    access_token = tokens_data.get("access_token")
+    refresh_token = tokens_data.get("refresh_token")
+    expires_at = _parse_oauth_expiry(tokens_data.get("expires_at"))
+
+    if access_token and (not expires_at or expires_at > datetime.utcnow() + timedelta(minutes=2)):
+        return access_token
+
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Calendar access token expired and no refresh token is available. Please reconnect Google Calendar.",
+        )
+
+    try:
+        refreshed = await calendar_service.refresh_access_token(refresh_token)
+        tokens_data["access_token"] = refreshed["access_token"]
+        tokens_data["expires_at"] = (
+            datetime.utcnow() + timedelta(seconds=int(refreshed.get("expires_in", 3600)))
+        ).isoformat()
+        preferences["calendar_oauth_tokens"] = tokens_data
+        preferences["calendar_connected"] = True
+        user.preferences = preferences
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return tokens_data["access_token"]
+    except Exception:
+        logger.warning(
+            "calendar.oauth.refresh_failed user=%s",
+            user.id,
+            exc_info=True,
+        )
+        tokens_data["access_token"] = None
+        preferences["calendar_oauth_tokens"] = tokens_data
+        preferences["calendar_connected"] = False
+        user.preferences = preferences
+        db.add(user)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google Calendar session expired. Please reconnect Google Calendar.",
+        )
+
+
 def _to_calendar_event_schema(
     parsed_event: dict,
     user_id: str,
@@ -93,7 +158,7 @@ async def get_current_user_from_db(
 @router.post("/oauth-authorize")
 async def initiate_oauth_flow(
     state: Optional[str] = Query(None, description="Optional state parameter for OAuth round-trip"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_from_db),
 ) -> ApiResponse:
     """
     Initiate Google Calendar OAuth flow.
@@ -127,7 +192,7 @@ async def initiate_oauth_flow(
 async def handle_oauth_callback(
     code: str = Query(..., description="Authorization code from Google"),
     state: str = Query(..., description="State parameter for CSRF protection"),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_from_db),
     db: Session = Depends(get_db),
 ) -> ApiResponse:
     """
@@ -161,19 +226,20 @@ async def handle_oauth_callback(
             )
 
         # Store OAuth tokens in user preferences
-        if user.preferences is None:
-            user.preferences = {}
-
-        user.preferences["calendar_oauth_tokens"] = {
+        preferences = dict(user.preferences or {})
+        existing_tokens = dict(preferences.get("calendar_oauth_tokens") or {})
+        preferences["calendar_oauth_tokens"] = {
             "access_token": tokens["access_token"],
-            "refresh_token": tokens["refresh_token"],
+            "refresh_token": tokens.get("refresh_token") or existing_tokens.get("refresh_token"),
             "expires_at": (
                 datetime.utcnow() + timedelta(seconds=tokens["expires_in"])
             ).isoformat(),
         }
+        preferences["calendar_connected"] = True
+        user.preferences = preferences
 
         user.oauth_provider = "google"
-        user_repo.update(user)
+        db.add(user)
         db.commit()
 
         logger.info(f"User {current_user.id} connected Google Calendar")
@@ -238,14 +304,7 @@ async def get_daily_schedule(
                 detail="Google Calendar not connected. Please authorize first.",
             )
 
-        tokens_data = user.preferences.get("calendar_oauth_tokens", {})
-        access_token = tokens_data.get("access_token")
-
-        if not access_token:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="No valid access token. Please reconnect Google Calendar.",
-            )
+        access_token = await _resolve_calendar_access_token(user, db)
 
         # Fetch events from Google Calendar for this day
         day_start = date_in_tz.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -421,8 +480,7 @@ async def find_free_slots(
                 str(db_error),
             )
 
-            tokens_data = (current_user.preferences or {}).get("calendar_oauth_tokens", {})
-            access_token = tokens_data.get("access_token")
+            access_token = await _resolve_calendar_access_token(current_user, db)
             if access_token:
                 google_events = await calendar_service.fetch_user_events(
                     access_token, day_start, day_end, max_results=100

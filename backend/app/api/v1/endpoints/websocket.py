@@ -172,28 +172,42 @@ async def websocket_endpoint(
         """Listen for Redis pub/sub events and forward to WebSocket."""
         try:
             while True:
-                # Check for pub/sub messages
-                message = pub_sub.get_message()
+                # Run blocking Redis read off the event loop.
+                message = await asyncio.to_thread(
+                    pub_sub.get_message,
+                    True,
+                    1.0,
+                )
                 
                 if message:
-                    if message["type"] == "message":
-                        try:
-                            event_data = json.loads(message["data"])
-                            # Relay event to WebSocket
-                            await connection_manager.broadcast_to_user(
-                                user_id,
-                                event_data.get("type"),
-                                event_data.get("data", {}),
-                                event_data.get("trace_id"),
-                            )
-                        except json.JSONDecodeError:
-                            logger.error(f"Failed to parse pub/sub message")
-                
-                await asyncio.sleep(0.01)  # Small delay to prevent busy loop
+                    try:
+                        payload = message.get("data")
+                        if isinstance(payload, bytes):
+                            payload = payload.decode("utf-8")
+
+                        event_data = json.loads(payload)
+                        await websocket.send_json(
+                            {
+                                "type": event_data.get("type", "unknown"),
+                                "sequence": connection_manager.get_next_sequence(user_id),
+                                "timestamp": datetime.utcnow().isoformat(),
+                                "trace_id": event_data.get("trace_id", "N/A"),
+                                "user_id": user_id,
+                                "data": event_data.get("data", {}),
+                            }
+                        )
+                    except json.JSONDecodeError:
+                        logger.error("Failed to parse pub/sub message")
+                    except Exception as exc:
+                        logger.warning(
+                            "Failed to relay websocket pub/sub event",
+                            extra={"user_id": user_id, "error": str(exc)},
+                        )
         except asyncio.CancelledError:
             pass
         finally:
-            pub_sub.unsubscribe(approval_channel)
+            await asyncio.to_thread(pub_sub.unsubscribe, approval_channel)
+            await asyncio.to_thread(pub_sub.close)
     
     # Start event listener task
     event_task = asyncio.create_task(listen_for_events())
