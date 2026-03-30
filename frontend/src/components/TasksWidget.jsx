@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiRequest } from '../lib/apiClient'
+import ConfirmationModal from './ConfirmationModal'
 
 /**
  * Tasks Widget Component
@@ -14,6 +15,9 @@ export default function TasksWidget() {
   const [error, setError] = useState('')
   const [updatingId, setUpdatingId] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false)
+  const [taskToDelete, setTaskToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     let isMounted = true
@@ -101,24 +105,38 @@ export default function TasksWidget() {
     }
   }
 
-  const deleteTask = async (id) => {
+  const openDeleteConfirmation = (id) => {
     const task = tasks.find(t => t.id === id)
-    if (!task || !confirm(`Delete task "${task.title}"?`)) return
+    if (task) {
+      setTaskToDelete(task)
+      setDeleteConfirmationOpen(true)
+    }
+  }
 
-    setUpdatingId(id)
+  const confirmDelete = async () => {
+    if (!taskToDelete) return
+
+    setIsDeleting(true)
     setError('')
 
     try {
-      await apiRequest(`/api/v1/tasks/${id}`, { method: 'DELETE' })
-      setTasks(prev => prev.filter(t => t.id !== id))
-      setSuccessMessage(`Task "${task.title}" deleted`)
+      await apiRequest(`/api/v1/tasks/${taskToDelete.id}`, { method: 'DELETE' })
+      setTasks(prev => prev.filter(t => t.id !== taskToDelete.id))
+      setSuccessMessage(`Task "${taskToDelete.title}" deleted`)
       setTimeout(() => setSuccessMessage(''), 3000)
+      setDeleteConfirmationOpen(false)
+      setTaskToDelete(null)
     } catch (deleteError) {
       const message = deleteError instanceof Error ? deleteError.message : 'Failed to delete task'
       setError(message)
     } finally {
-      setUpdatingId(null)
+      setIsDeleting(false)
     }
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirmationOpen(false)
+    setTaskToDelete(null)
   }
 
   const getPriorityColor = (priority) => {
@@ -235,7 +253,7 @@ export default function TasksWidget() {
               </span>
               <button
                 type="button"
-                onClick={() => deleteTask(task.id)}
+                onClick={() => openDeleteConfirmation(task.id)}
                 disabled={updatingId === task.id}
                 className="
                   opacity-0 group-hover:opacity-100 rounded px-2 py-1 text-xs
@@ -264,6 +282,19 @@ export default function TasksWidget() {
       >
         View all tasks →
       </button>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmationOpen}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        title="Delete Task?"
+        message={taskToDelete ? `Are you sure you want to delete "${taskToDelete.title}"? This action cannot be undone.` : ''}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isLoading={isDeleting}
+        isDangerous={true}
+      />
     </article>
   )
 }

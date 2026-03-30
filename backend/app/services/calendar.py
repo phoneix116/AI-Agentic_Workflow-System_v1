@@ -511,15 +511,25 @@ class GoogleCalendarService:
         # Handle all-day events vs timed events
         start_time = start.get("dateTime") or start.get("date")
         end_time = end.get("dateTime") or end.get("date")
+        is_all_day = "dateTime" not in start
+
+        # Parse datetimes
+        parsed_start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
+        parsed_end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
+
+        # For all-day events, Google uses an exclusive end date (points to start of next day)
+        # Adjust to make end_time inclusive (end of the actual event day) by subtracting 1 day
+        if is_all_day and parsed_end > parsed_start:
+            parsed_end = parsed_end - timedelta(days=1)
 
         return {
             "google_event_id": google_event.get("id"),
             "title": google_event.get("summary", "Untitled"),
             "description": google_event.get("description"),
-            "start_time": datetime.fromisoformat(start_time.replace("Z", "+00:00")),
-            "end_time": datetime.fromisoformat(end_time.replace("Z", "+00:00")),
+            "start_time": parsed_start,
+            "end_time": parsed_end,
             "location": google_event.get("location"),
-            "all_day": "dateTime" not in start,
+            "all_day": is_all_day,
             "color_id": google_event.get("colorId"),
             "status": google_event.get("status", "confirmed").lower(),
             "attendees": [

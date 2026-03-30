@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { apiRequest } from '../lib/apiClient'
 import Modal from './Modal'
+import ConfirmationModal from './ConfirmationModal'
 
 /**
  * Tasks Modal Component
@@ -14,6 +15,9 @@ export default function TasksModal({ isOpen, onClose }) {
   const [newTask, setNewTask] = useState('')
   const [priority, setPriority] = useState('medium')
   const [submitting, setSubmitting] = useState(false)
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false)
+  const [taskToDelete, setTaskToDelete] = useState(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -80,14 +84,32 @@ export default function TasksModal({ isOpen, onClose }) {
     }
   }
 
-  const handleDeleteTask = async (taskId) => {
+  const handleDeleteTask = (task) => {
+    setTaskToDelete(task)
+    setDeleteConfirmationOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!taskToDelete) return
+
+    setIsDeleting(true)
+    setError('')
+
     try {
-      setError('')
-      await apiRequest(`/api/v1/tasks/${taskId}`, { method: 'DELETE' })
-      setTasks(tasks.filter(t => t.id !== taskId))
+      await apiRequest(`/api/v1/tasks/${taskToDelete.id}`, { method: 'DELETE' })
+      setTasks(tasks.filter(t => t.id !== taskToDelete.id))
+      setDeleteConfirmationOpen(false)
+      setTaskToDelete(null)
     } catch (err) {
       setError('Failed to delete task')
+    } finally {
+      setIsDeleting(false)
     }
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirmationOpen(false)
+    setTaskToDelete(null)
   }
 
   const activeTasks = tasks.filter(t => t.status !== 'completed')
@@ -188,7 +210,7 @@ export default function TasksModal({ isOpen, onClose }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleDeleteTask(task.id)}
+                    onClick={() => handleDeleteTask(task)}
                     className="
                       touch-target p-1 text-text-secondary hover:text-red-300
                       transition-colors focus-visible:outline-none focus-visible:ring-1
@@ -225,7 +247,7 @@ export default function TasksModal({ isOpen, onClose }) {
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleDeleteTask(task.id)}
+                    onClick={() => handleDeleteTask(task)}
                     className="
                       touch-target p-1 text-green-300 hover:text-red-300
                       transition-colors focus-visible:outline-none focus-visible:ring-1
@@ -241,6 +263,19 @@ export default function TasksModal({ isOpen, onClose }) {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmationOpen}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+        title="Delete Task?"
+        message={taskToDelete ? `Are you sure you want to delete "${taskToDelete.title}"? This action cannot be undone.` : ''}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isLoading={isDeleting}
+        isDangerous={true}
+      />
     </Modal>
   )
 }
