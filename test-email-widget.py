@@ -44,6 +44,23 @@ class EmailWidgetTester:
         prefix = f"{BOLD}[{level}]{RESET}"
         print(f"{color}{prefix} {message}{RESET}")
     
+    def get_dev_token(self) -> Optional[str]:
+        """Get development token for testing"""
+        try:
+            response = requests.post(
+                "http://localhost:8000/api/v1/health/dev/token",
+                timeout=5,
+            )
+            if response.status_code == 200:
+                data = response.json()
+                token = data.get("data", {}).get("token")
+                if token:
+                    self.log(f"Dev token acquired for user: demo.user@local.dev", "SUCCESS")
+                    return token
+        except Exception as e:
+            self.log(f"Failed to get dev token: {str(e)}", "WARNING")
+        return None
+    
     def test_result(self, test_name: str, passed: bool, details: str = ""):
         """Record and display test result"""
         if passed:
@@ -109,6 +126,11 @@ class EmailWidgetTester:
         self.log("=" * 60, "INFO")
         self.log("Email Widget Button Validation", "INFO")
         self.log("=" * 60, "INFO")
+        
+        # Get auth token
+        self.auth_token = self.get_dev_token()
+        if not self.auth_token:
+            self.log("WARNING: Could not obtain dev token - running unauthenticated tests", "WARNING")
         
         # Test 1: Check endpoint availability
         self.log("\n1. Checking Backend Endpoint Availability", "INFO")

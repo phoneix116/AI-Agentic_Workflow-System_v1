@@ -62,15 +62,23 @@ class AgentOrchestrator:
     def execute_chat(self, user: User, message: str, session_id: str | None = None) -> AgentState:
         start = perf_counter()
         trace_id = get_trace_id() or str(uuid4())
+        user_context = self._build_user_context(user)
         state = StateBuilder.create_initial_state(
             user_id=user.id,
             trace_id=trace_id,
             session_id=session_id or str(uuid4()),
-            user_input=UserInput(type=InputTriggerType.USER_CHAT, content=message, context={"message_type": "text"}),
+            user_input=UserInput(
+                type=InputTriggerType.USER_CHAT,
+                content=message,
+                context={
+                    "message_type": "text",
+                    "user_context": user_context,
+                },
+            ),
         )
 
         try:
-            self._run_planner(state)
+            self._run_planner(state, user_context=user_context)
             self._run_router(state)
             self._run_tools(state, user)
             self._build_response(state)
@@ -90,8 +98,8 @@ class AgentOrchestrator:
             state.response = ResponseContent(message="I could not complete that request right now. Please try again.")
             return state
 
-    def _run_planner(self, state: AgentState) -> None:
-        if self._run_planner_with_llm(state):
+    def _run_planner(self, state: AgentState, user_context: dict[str, Any]) -> None:
+        if self._run_planner_with_llm(state, user_context=user_context):
             return
 
         logger.warning(
@@ -109,7 +117,7 @@ class AgentOrchestrator:
         state.current_node = "planner"
         state.metadata.nodes_executed.append("planner")
 
-    def _run_planner_with_llm(self, state: AgentState) -> bool:
+    def _run_planner_with_llm(self, state: AgentState, user_context: dict[str, Any]) -> bool:
         if not self._planner_llm:
             return False
 
@@ -156,6 +164,7 @@ class AgentOrchestrator:
             "4. Return valid JSON even if you're unsure - use confidence field\n"
             "5. If message is unclear, use chat_response action\n"
             "6. If user is asking for advice/suggestions/brainstorming (no explicit data fetch or update request), use chat_response\n\n"
+            f"User profile context (JSON): {json.dumps(user_context, default=str)}\n\n"
             f"User message: {state.user_input.content or ''}"
         )
 
@@ -685,6 +694,7 @@ class AgentOrchestrator:
     def _generate_conversational_reply(self, state: AgentState) -> str:
         """Generate a natural assistant response when no tools are required."""
         user_text = state.user_input.content or ""
+        user_context = dict((state.user_input.context or {}).get("user_context") or {})
 
         if not self._assistant_llm:
             return (
@@ -698,6 +708,7 @@ class AgentOrchestrator:
             "Give concise, actionable suggestions. "
             "If useful, propose a short step-by-step plan. "
             "Do not mention internal tools, routing, or implementation details.\n\n"
+            f"Personalization context (JSON): {json.dumps(user_context, default=str)}\n\n"
             f"User message: {user_text}"
         )
 
@@ -717,6 +728,26 @@ class AgentOrchestrator:
             "Got it. I can help you decide what to do next across tasks, calendar, and emails. "
             "Tell me your goal for today and I will suggest a focused plan."
         )
+
+    @staticmethod
+    def _build_user_context(user: User) -> dict[str, Any]:
+        preferences = dict(user.preferences or {})
+        profile = dict(preferences.get("assistant_profile") or {})
+
+        return {
+            "user_id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "timezone": user.timezone,
+            "language": profile.get("language") or preferences.get("language") or "en",
+            "organization": profile.get("organization"),
+            "role": profile.get("role"),
+            "working_hours_start": profile.get("working_hours_start"),
+            "working_hours_end": profile.get("working_hours_end"),
+            "communication_tone": profile.get("communication_tone") or preferences.get("tone"),
+            "role_context": profile.get("role_context"),
+            "ai_instructions": profile.get("ai_instructions"),
+        }
 
     def _persist_state(self, state: AgentState) -> None:
         try:

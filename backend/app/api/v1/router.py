@@ -9,6 +9,7 @@ from app.api.v1.endpoints.emails import router as emails_router
 from app.api.v1.endpoints.approvals import router as approvals_router
 from app.api.v1.endpoints.websocket import router as websocket_router
 from app.api.v1.endpoints.chat import router as chat_router
+from app.api.v1.endpoints.users import router as users_router
 
 router = APIRouter()
 router.include_router(health_router)
@@ -20,4 +21,5 @@ router.include_router(emails_router)
 router.include_router(approvals_router)
 router.include_router(websocket_router)
 router.include_router(chat_router)
+router.include_router(users_router)
 

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useModal } from '../lib/ModalContext'
+import { apiRequest } from '../lib/apiClient'
 
 /**
  * Sidebar Navigation Component
@@ -9,7 +10,46 @@ import { useModal } from '../lib/ModalContext'
  */
 export default function Sidebar({ mobileOpen = false, onToggleMobile, onCloseMobile, onLogout }) {
   const [activeNav, setActiveNav] = useState('dashboard')
+  const [profile, setProfile] = useState({
+    name: 'User',
+    role: '',
+    organization: '',
+  })
   const { openModal } = useModal()
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadProfileSummary = async () => {
+      try {
+        const response = await apiRequest('/api/v1/users/profile', { method: 'GET' })
+        const data = response?.profile
+        if (!mounted || !data) {
+          return
+        }
+
+        setProfile({
+          name: data.name || 'User',
+          role: data.role || '',
+          organization: data.organization || '',
+        })
+      } catch {
+        // Keep defaults if profile endpoint cannot be loaded.
+      }
+    }
+
+    loadProfileSummary()
+
+    const handleProfileUpdated = () => {
+      loadProfileSummary()
+    }
+
+    window.addEventListener('assistant:profile-updated', handleProfileUpdated)
+    return () => {
+      mounted = false
+      window.removeEventListener('assistant:profile-updated', handleProfileUpdated)
+    }
+  }, [])
 
   const handleNavClick = (itemId) => {
     setActiveNav(itemId)
@@ -98,6 +138,7 @@ export default function Sidebar({ mobileOpen = false, onToggleMobile, onCloseMob
       <div className="space-y-3 pt-4 border-t border-white/10">
         <button
           type="button"
+          onClick={() => handleNavClick('profile')}
           className="
             touch-target w-full flex items-center gap-3 px-4 py-3 rounded-lg
             text-text-secondary hover:text-text-primary hover:bg-white/5
@@ -108,8 +149,10 @@ export default function Sidebar({ mobileOpen = false, onToggleMobile, onCloseMob
         >
           <div className="w-8 h-8 rounded-full bg-gradient-primary glow flex-shrink-0" />
           <div className="flex-1 text-left">
-            <p className="text-sm font-medium text-text-primary">User</p>
-            <p className="text-xs text-text-secondary">Active</p>
+            <p className="text-sm font-medium text-text-primary">{profile.name}</p>
+            <p className="text-xs text-text-secondary">
+              {profile.role || profile.organization || 'Set profile'}
+            </p>
           </div>
         </button>
 

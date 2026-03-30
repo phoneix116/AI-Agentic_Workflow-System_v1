@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { useModal } from '../lib/ModalContext'
+import { apiRequest } from '../lib/apiClient'
 
 /**
  * Top Navigation Bar Component
@@ -8,6 +10,45 @@ import { useModal } from '../lib/ModalContext'
  */
 export default function TopNav({ onLogout }) {
   const { openModal } = useModal()
+  const [profile, setProfile] = useState({
+    name: 'User',
+    role: '',
+    organization: '',
+  })
+
+  useEffect(() => {
+    let mounted = true
+
+    const loadProfileSummary = async () => {
+      try {
+        const response = await apiRequest('/api/v1/users/profile', { method: 'GET' })
+        const data = response?.profile
+        if (!mounted || !data) {
+          return
+        }
+
+        setProfile({
+          name: data.name || 'User',
+          role: data.role || '',
+          organization: data.organization || '',
+        })
+      } catch {
+        // Keep defaults if profile endpoint is unavailable.
+      }
+    }
+
+    loadProfileSummary()
+
+    const handleProfileUpdated = () => {
+      loadProfileSummary()
+    }
+
+    window.addEventListener('assistant:profile-updated', handleProfileUpdated)
+    return () => {
+      mounted = false
+      window.removeEventListener('assistant:profile-updated', handleProfileUpdated)
+    }
+  }, [])
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -59,6 +100,7 @@ export default function TopNav({ onLogout }) {
           <div className="flex items-center gap-2 flex-shrink-0">
             <button
               type="button"
+              onClick={() => openModal('profile')}
               className="
                 touch-target hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg
                 text-text-secondary hover:text-text-primary hover:bg-white/5
@@ -69,8 +111,10 @@ export default function TopNav({ onLogout }) {
             >
               <div className="w-6 h-6 rounded-full bg-gradient-primary glow flex-shrink-0" />
               <div className="text-left">
-                <p className="text-xs font-medium text-text-primary">User</p>
-                <p className="text-xs text-text-secondary">Active</p>
+                <p className="text-xs font-medium text-text-primary">{profile.name}</p>
+                <p className="text-xs text-text-secondary">
+                  {profile.role || profile.organization || 'Set profile'}
+                </p>
               </div>
             </button>
 

@@ -7,6 +7,7 @@ import DashboardModal from './DashboardModal'
 import NoteToSelfModal from './NoteToSelfModal'
 import TasksModal from './TasksModal'
 import CalendarModal from './CalendarModal'
+import UserProfileModal from './UserProfileModal'
 
 /**
  * Main layout component
@@ -20,7 +21,7 @@ function LayoutContent({ onLogout }) {
     <div className="relative min-h-screen w-full overflow-hidden bg-background-DEFAULT text-text-primary">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(0,212,255,0.16),_transparent_42%),radial-gradient(circle_at_bottom_right,_rgba(108,99,255,0.24),_transparent_42%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(57,255,20,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(0,200,83,0.24),_transparent_45%)]"
       />
 
       <a
@@ -56,6 +57,7 @@ function LayoutContent({ onLogout }) {
       <NoteToSelfModal isOpen={modals.messages} onClose={() => closeModal('messages')} />
       <TasksModal isOpen={modals.tasks} onClose={() => closeModal('tasks')} />
       <CalendarModal isOpen={modals.calendar} onClose={() => closeModal('calendar')} />
+      <UserProfileModal isOpen={modals.profile} onClose={() => closeModal('profile')} />
     </div>
   )
 }

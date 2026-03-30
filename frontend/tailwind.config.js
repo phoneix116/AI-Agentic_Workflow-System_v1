@@ -9,28 +9,28 @@ export default {
       colors: {
         // Design System Colors
         primary: {
-          DEFAULT: '#6C63FF',
-          light: '#8B7FFF',
-          dark: '#4C43DF',
+          DEFAULT: '#39FF14',
+          light: '#7CFF62',
+          dark: '#1FB700',
         },
         secondary: {
-          DEFAULT: '#00D4FF',
-          light: '#4DDEFF',
-          dark: '#00A8CC',
+          DEFAULT: '#00C853',
+          light: '#5EFC82',
+          dark: '#008F3A',
         },
         background: {
-          DEFAULT: '#0F172A',
-          card: 'rgba(255, 255, 255, 0.05)',
+          DEFAULT: '#030603',
+          card: 'rgba(57, 255, 20, 0.08)',
         },
         text: {
-          primary: '#FFFFFF',
-          secondary: '#94A3B8',
-          tertiary: '#64748B',
+          primary: '#B8FF9A',
+          secondary: '#75C66A',
+          tertiary: '#3A7E40',
         },
       },
       gradients: {
-        'primary-gradient': 'linear-gradient(135deg, #6C63FF, #00D4FF)',
-        'glow-effect': 'radial-gradient(circle, rgba(0, 212, 255, 0.4), transparent)',
+        'primary-gradient': 'linear-gradient(135deg, #00A63E, #39FF14)',
+        'glow-effect': 'radial-gradient(circle, rgba(57, 255, 20, 0.45), transparent)',
       },
       spacing: {
         'card': '16px',
@@ -48,12 +48,12 @@ export default {
         'body': '14px',
       },
       fontFamily: {
-        'display': ['Inter', 'SF Pro Display', 'system-ui', 'sans-serif'],
-        'sans': ['Inter', 'system-ui', 'sans-serif'],
+        'display': ['"Share Tech Mono"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        'sans': ['"Share Tech Mono"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       boxShadow: {
-        'glow': '0 0 20px rgba(0, 212, 255, 0.2)',
-        'glow-lg': '0 0 40px rgba(108, 99, 255, 0.3)',
+        'glow': '0 0 22px rgba(57, 255, 20, 0.32)',
+        'glow-lg': '0 0 40px rgba(57, 255, 20, 0.45)',
       },
       animation: {
         'typing': 'typing 0.7s steps(4, end) infinite',

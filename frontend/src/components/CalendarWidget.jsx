@@ -10,8 +10,14 @@ import { createPortal } from 'react-dom'
  */
 export default function CalendarWidget() {
   const startDate = new Date()
-  startDate.setDate(startDate.getDate() + 2)  // Default to March 30th
   startDate.setHours(0, 0, 0, 0)
+
+  const formatLocalDate = (value) => {
+    const year = value.getFullYear()
+    const month = String(value.getMonth() + 1).padStart(2, '0')
+    const day = String(value.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
   
   const now = new Date()
   const [displayDate, setDisplayDate] = useState(startDate)
@@ -33,7 +39,7 @@ export default function CalendarWidget() {
       setIsLoading(true)
       setError('')
 
-      const dateStr = displayDate.toISOString().slice(0, 10)
+      const dateStr = formatLocalDate(displayDate)
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
       try {
@@ -89,10 +95,11 @@ export default function CalendarWidget() {
     setError('')
 
     try {
-      const dateStr = displayDate.toISOString().slice(0, 10)
+      const dateStr = formatLocalDate(displayDate)
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       const payload = await apiRequest('/api/v1/calendar/free-slots', {
         method: 'POST',
-        body: JSON.stringify({ date: dateStr, min_duration_minutes: 30 }),
+        body: JSON.stringify({ date: dateStr, min_duration_minutes: 30, timezone }),
       })
 
       const slots = Array.isArray(payload?.free_slots) ? payload.free_slots : []
@@ -116,7 +123,7 @@ export default function CalendarWidget() {
     setFreeSlots([])
     setShowFreeSlots(false)
 
-    const dateStr = displayDate.toISOString().slice(0, 10)
+    const dateStr = formatLocalDate(displayDate)
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
 
     try {
@@ -196,7 +203,7 @@ export default function CalendarWidget() {
       setTimeout(() => setSuccessMessage(''), 3000)
       
       // Refresh schedule
-      const dateStr = displayDate.toISOString().slice(0, 10)
+      const dateStr = formatLocalDate(displayDate)
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
       const refreshPayload = await apiRequest('/api/v1/calendar/daily-schedule', {
         method: 'POST',
