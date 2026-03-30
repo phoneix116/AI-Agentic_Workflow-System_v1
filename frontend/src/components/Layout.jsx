@@ -21,7 +21,7 @@ function LayoutContent({ onLogout }) {
     <div className="relative min-h-screen w-full overflow-hidden bg-background-DEFAULT text-text-primary">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(57,255,20,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(0,200,83,0.24),_transparent_45%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.14),_transparent_45%)]"
       />
 
       <a

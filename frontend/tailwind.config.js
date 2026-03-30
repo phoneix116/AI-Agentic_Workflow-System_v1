@@ -9,28 +9,28 @@ export default {
       colors: {
         // Design System Colors
         primary: {
-          DEFAULT: '#39FF14',
-          light: '#7CFF62',
-          dark: '#1FB700',
+          DEFAULT: '#3B82F6',
+          light: '#60A5FA',
+          dark: '#1D4ED8',
         },
         secondary: {
-          DEFAULT: '#00C853',
-          light: '#5EFC82',
-          dark: '#008F3A',
+          DEFAULT: '#0EA5E9',
+          light: '#38BDF8',
+          dark: '#0284C7',
         },
         background: {
-          DEFAULT: '#030603',
-          card: 'rgba(57, 255, 20, 0.08)',
+          DEFAULT: '#0B1220',
+          card: 'rgba(15, 23, 42, 0.72)',
         },
         text: {
-          primary: '#B8FF9A',
-          secondary: '#75C66A',
-          tertiary: '#3A7E40',
+          primary: '#E2E8F0',
+          secondary: '#94A3B8',
+          tertiary: '#64748B',
         },
       },
       gradients: {
-        'primary-gradient': 'linear-gradient(135deg, #00A63E, #39FF14)',
-        'glow-effect': 'radial-gradient(circle, rgba(57, 255, 20, 0.45), transparent)',
+        'primary-gradient': 'linear-gradient(135deg, #1D4ED8, #0EA5E9)',
+        'glow-effect': 'radial-gradient(circle, rgba(59, 130, 246, 0.32), transparent)',
       },
       spacing: {
         'card': '16px',
@@ -48,12 +48,12 @@ export default {
         'body': '14px',
       },
       fontFamily: {
-        'display': ['"Share Tech Mono"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
-        'sans': ['"Share Tech Mono"', '"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        'display': ['"Manrope"', '"IBM Plex Sans"', 'ui-sans-serif', 'sans-serif'],
+        'sans': ['"IBM Plex Sans"', '"Manrope"', 'ui-sans-serif', 'sans-serif'],
       },
       boxShadow: {
-        'glow': '0 0 22px rgba(57, 255, 20, 0.32)',
-        'glow-lg': '0 0 40px rgba(57, 255, 20, 0.45)',
+        'glow': '0 12px 24px rgba(15, 23, 42, 0.28)',
+        'glow-lg': '0 20px 40px rgba(15, 23, 42, 0.36)',
       },
       animation: {
         'typing': 'typing 0.7s steps(4, end) infinite',

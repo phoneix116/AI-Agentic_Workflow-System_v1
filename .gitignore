@@ -60,6 +60,7 @@ tests/
 **/tests/
 test_*.py
 *_test.py
+test-email-widget.py
 *.spec.js
 *.spec.ts
 *.test.js

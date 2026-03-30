@@ -40,7 +40,7 @@ export default function Login({ onLoginSuccess, initialError = '' }) {
       {/* Gradient background */}
       <div
         aria-hidden="true"
-        className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(57,255,20,0.2),_transparent_40%),radial-gradient(circle_at_bottom_right,_rgba(0,200,83,0.24),_transparent_45%)]"
+        className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_38%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.14),_transparent_45%)]"
       />
 
       <article className="glass relative z-10 rounded-2xl border border-white/10 p-8 md:p-12 w-full max-w-md shadow-2xl">
