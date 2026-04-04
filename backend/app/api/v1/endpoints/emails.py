@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user, TokenPayload, JWTManager
 from app.core.config import settings
+from app.core.retry import RetryExhaustedError
 from app.db.config import get_db
 from app.db.models import User
+from app.integrations.gmail import GmailInsufficientScopeError
 from app.schemas.email import (
     EmailListRequest,
     EmailListResponse,
@@ -546,7 +548,22 @@ async def mark_email_as_read(
             detail="Gmail account not connected",
         )
     
-    success = gmail_client.mark_as_read(email_id)
+    try:
+        success = gmail_client.mark_as_read(email_id)
+    except GmailInsufficientScopeError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Gmail permissions are insufficient to modify messages. "
+                "Please reconnect Google account and grant modify access."
+            ),
+        )
+    except RetryExhaustedError:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Gmail API is temporarily unavailable. Please try again.",
+        )
+
     if not success:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -598,6 +615,14 @@ async def archive_email(
         }
     except Exception as error:
         logger.error(f"Error archiving email: {error}")
+        if isinstance(error, GmailInsufficientScopeError):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Gmail permissions are insufficient to archive messages. "
+                    "Please reconnect Google account and grant modify access."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to archive email",
@@ -641,6 +666,14 @@ async def delete_email(
         }
     except Exception as error:
         logger.error(f"Error deleting email: {error}")
+        if isinstance(error, GmailInsufficientScopeError):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Gmail permissions are insufficient to delete messages. "
+                    "Please reconnect Google account and grant modify access."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete email",
@@ -696,6 +729,14 @@ async def snooze_email(
         }
     except Exception as error:
         logger.error(f"Error snoozing email: {error}")
+        if isinstance(error, GmailInsufficientScopeError):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Gmail permissions are insufficient to snooze messages. "
+                    "Please reconnect Google account and grant modify access."
+                ),
+            )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to snooze email",

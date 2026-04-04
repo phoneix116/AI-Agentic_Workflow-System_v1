@@ -54,6 +54,7 @@ _REDIS_RETRY_ATTEMPTS = 2
 _REDIS_RETRY_BACKOFF_SECONDS = 0.2
 _redis_last_healthcheck = 0.0
 _redis_available = True
+_redis_last_degraded_log = 0.0
 
 
 class _NullPubSub:
@@ -144,8 +145,18 @@ def _refresh_redis_health() -> bool:
 
 def get_redis() -> Any:
     """Get Redis client instance with graceful fallback when unavailable."""
+    global _redis_last_degraded_log
+
     if _refresh_redis_health():
         return redis_client
+
+    now = time.time()
+    if now - _redis_last_degraded_log >= _REDIS_HEALTHCHECK_INTERVAL_SECONDS:
+        logger.warning(
+            "redis.degraded_mode.enabled",
+            extra={"mode": "null_redis", "reason": "healthcheck_failed"},
+        )
+        _redis_last_degraded_log = now
 
     return _null_redis_client
 

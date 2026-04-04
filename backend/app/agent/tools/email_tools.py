@@ -264,15 +264,10 @@ def create_email_tools(db: Session):
             if not gmail_client:
                 return {"error": "Gmail not connected", "status": "failed"}
             
-            email_details = gmail_client.get_message_details(email_id)
-            if not email_details:
-                return {"error": "Email not found", "status": "failed"}
-            
             # Generate draft
             draft = service.generate_draft_reply(
                 user,
                 email_id=email_id,
-                recipient=email_details.get("from_address"),
                 tone=tone,
             )
             

@@ -91,6 +91,11 @@ export default function ActivityWidget() {
   const remainingTasks = Math.max(tasks.length - completedTasks, 0)
   const unreadEmails = emails.filter((email) => email.is_unread).length
 
+  const openProductivityPage = () => {
+    window.history.pushState({}, '', '/productivity')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+
   return (
     <article className="glass rounded-xl border border-white/10 p-5">
       {/* Header */}
@@ -166,6 +171,7 @@ export default function ActivityWidget() {
       {/* View Insights Link */}
       <button
         type="button"
+        onClick={openProductivityPage}
         className="
           touch-target mt-4 w-full text-center text-sm text-secondary hover:text-secondary/80
           py-2 rounded transition-colors focus-visible:outline-none

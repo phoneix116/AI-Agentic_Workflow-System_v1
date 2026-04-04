@@ -10,6 +10,7 @@ psycopg2-binary==2.9.10
 
 # Cache
 redis==5.2.0
+elasticsearch==8.17.1
 
 # Agent & LLM
 langchain==0.3.11

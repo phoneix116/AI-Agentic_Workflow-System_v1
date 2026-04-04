@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useModal } from '../lib/ModalContext'
 import { apiRequest } from '../lib/apiClient'
+import { ASSISTANT_NAME } from '../lib/branding'
 
 /**
  * Sidebar Navigation Component
@@ -86,7 +87,7 @@ export default function Sidebar({ mobileOpen = false, onToggleMobile, onCloseMob
           <span className="text-white font-bold text-lg glow">🧠</span>
         </div>
         <div className="flex-1">
-          <h1 className="text-lg font-bold text-text-primary">Astra</h1>
+          <h1 className="text-lg font-bold text-text-primary">{ASSISTANT_NAME}</h1>
           <p className="text-xs text-text-secondary">AI Assistant</p>
         </div>
 

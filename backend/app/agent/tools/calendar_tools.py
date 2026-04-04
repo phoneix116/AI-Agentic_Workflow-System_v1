@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from typing import Any, Dict, Optional
 from uuid import uuid4
@@ -12,14 +12,28 @@ from sqlalchemy.orm import Session
 
 from app.core.logging_config import get_trace_id
 from app.core.metrics import metrics_collector
-from app.db.models import Approval, CalendarEvent
+from app.db.models import Approval, CalendarEvent, User
 from app.repositories.repositories import CalendarEventRepository
+from app.services.calendar import GoogleCalendarService
 
 logger = logging.getLogger(__name__)
+calendar_service = GoogleCalendarService()
 
 
 def _parse_datetime(value: str) -> datetime:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _parse_oauth_expiry(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            return parsed.astimezone(timezone.utc).replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
 
 
 def _event_to_dict(event: CalendarEvent) -> dict:
@@ -186,7 +200,8 @@ def create_calendar_tools(db: Session):
         description: Optional[str] = None,
         location: Optional[str] = None,
         attendees: Optional[list[str]] = None,
-        require_approval: bool = True,
+        timezone: str = "UTC",
+        require_approval: bool = False,
     ) -> Dict[str, Any]:
         start = perf_counter()
         trace_id = get_trace_id() or "N/A"
@@ -207,6 +222,7 @@ def create_calendar_tools(db: Session):
                         "description": description,
                         "start_time": start_dt.isoformat(),
                         "end_time": end_dt.isoformat(),
+                        "timezone": timezone,
                         "location": location,
                         "attendees": attendees or [],
                     },
@@ -227,12 +243,42 @@ def create_calendar_tools(db: Session):
                         "title": title,
                         "start_time": start_dt.isoformat(),
                         "end_time": end_dt.isoformat(),
+                        "timezone": timezone,
                         "location": location,
                     },
                 }
             else:
+                user = db.query(User).filter(User.id == user_id).first()
+                if not user:
+                    return {"status": "failed", "error": "User not found"}
+
+                preferences = dict(user.preferences or {})
+                tokens = dict(preferences.get("calendar_oauth_tokens") or {})
+                access_token = tokens.get("access_token")
+                expires_at = _parse_oauth_expiry(tokens.get("expires_at"))
+                if not access_token or (expires_at and expires_at <= datetime.utcnow()):
+                    return {
+                        "status": "failed",
+                        "error": "Calendar not connected or token expired. Reconnect Google Calendar and try again.",
+                    }
+
+                service = calendar_service.build_calendar_service(access_token)
+                google_event = service.events().insert(
+                    calendarId="primary",
+                    body={
+                        "summary": title,
+                        "description": description,
+                        "location": location,
+                        "start": {"dateTime": start_dt.isoformat(), "timeZone": timezone},
+                        "end": {"dateTime": end_dt.isoformat(), "timeZone": timezone},
+                        "attendees": [{"email": email} for email in (attendees or []) if email],
+                    },
+                    sendNotifications=True,
+                ).execute()
+
                 event = repo.create(
                     user_id=user_id,
+                    google_event_id=google_event.get("id"),
                     title=title,
                     description=description,
                     start_time=start_dt,
@@ -242,7 +288,14 @@ def create_calendar_tools(db: Session):
                     status=CalendarEvent.EventStatus.SCHEDULED,
                 )
                 db.commit()
-                response = {"status": "success", "requires_approval": False, "event": _event_to_dict(event)}
+                response = {
+                    "status": "success",
+                    "requires_approval": False,
+                    "synced_to_google": True,
+                    "google_event_id": google_event.get("id"),
+                    "google_event_link": google_event.get("htmlLink"),
+                    "event": _event_to_dict(event),
+                }
 
             duration_ms = (perf_counter() - start) * 1000
             metrics_collector.record_agent_step("tool.create_event", "success", duration_ms)

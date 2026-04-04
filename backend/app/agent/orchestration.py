@@ -30,12 +30,14 @@ from app.agent.state import (
 from app.agent.tools.calendar_tools import create_calendar_tools
 from app.agent.tools.email_tools import create_email_tools
 from app.agent.tools.planning_tools import create_planning_tools
+from app.agent.tools.search_tools import create_search_tools
 from app.agent.tools.task_tools import create_task_tools
 from app.cache.config import get_redis
 from app.core.config import settings
 from app.core.logging_config import get_trace_id
 from app.core.metrics import metrics_collector
 from app.db.models import Approval, User
+from app.services.conversation_memory import ConversationMemoryService
 
 logger = logging.getLogger(__name__)
 
@@ -59,14 +61,31 @@ class AgentOrchestrator:
                 api_key=settings.groq_api_key,
             )
 
-    def execute_chat(self, user: User, message: str, session_id: str | None = None) -> AgentState:
+    def execute_chat(
+        self,
+        user: User,
+        message: str,
+        session_id: str | None = None,
+        external_context: dict[str, Any] | None = None,
+    ) -> AgentState:
         start = perf_counter()
         trace_id = get_trace_id() or str(uuid4())
-        user_context = self._build_user_context(user)
+        resolved_session_id = session_id or str(uuid4())
+        memory_service = ConversationMemoryService(self.db)
+        runtime_memory = memory_service.get_runtime_context(
+            user_id=user.id,
+            session_id=resolved_session_id,
+            query=message,
+        )
+        user_context = self._build_user_context(
+            user,
+            conversation_context=runtime_memory.to_dict(),
+            external_context=external_context,
+        )
         state = StateBuilder.create_initial_state(
             user_id=user.id,
             trace_id=trace_id,
-            session_id=session_id or str(uuid4()),
+            session_id=resolved_session_id,
             user_input=UserInput(
                 type=InputTriggerType.USER_CHAT,
                 content=message,
@@ -83,6 +102,12 @@ class AgentOrchestrator:
             self._run_tools(state, user)
             self._build_response(state)
             self._persist_state(state)
+            self._persist_conversation_turns(
+                memory_service=memory_service,
+                user=user,
+                state=state,
+                user_message=message,
+            )
 
             state.metadata.end_time = datetime.utcnow()
             state.metadata.execution_time_ms = (perf_counter() - start) * 1000
@@ -135,15 +160,19 @@ class AgentOrchestrator:
             "find_best_slot",
             "create_event",
             "generate_daily_plan",
+            "serp_search",
+            "save_search_note",
+            "list_search_notes",
         ]
 
         prompt = (
-            "You are an expert intent planner for an AI assistant. Your task is to understand the semantic intent "
+            f"You are an expert intent planner for {settings.assistant_name}. Your task is to understand the semantic intent "
             "of user messages and determine the best action and tools to execute.\n\n"
             "INTENT UNDERSTANDING (not keyword matching):\n"
             "- User wants to review/send emails: INTENT = email operations\n"
             "- User wants to check calendar/see free slots/schedule meeting: INTENT = calendar operations\n"
             "- User wants to create/update/complete tasks: INTENT = task management\n"
+            "- User wants web research or to search Google: INTENT = web search operations\n"
             "- User needs help planning/organizing: INTENT = planning\n"
             "- Otherwise: INTENT = conversational response\n\n"
             "Return ONLY valid JSON with this schema:\n"
@@ -234,6 +263,7 @@ class AgentOrchestrator:
         tools.update(create_email_tools(self.db))
         tools.update(create_task_tools(self.db))
         tools.update(create_calendar_tools(self.db))
+        tools.update(create_search_tools(self.db))
         tools.update(create_planning_tools(self.db))
 
         for requirement in state.plan.tools_required if state.plan else []:
@@ -318,13 +348,16 @@ class AgentOrchestrator:
         if not isinstance(params, dict):
             return {}
 
+        # user_id is always injected by the orchestrator call site; never forward planner-provided values.
+        sanitized_params = {key: value for key, value in params.items() if key != "user_id"}
+
         try:
             signature = inspect.signature(tool_fn)
         except (TypeError, ValueError):
-            return params
+            return sanitized_params
 
         if any(param.kind == inspect.Parameter.VAR_KEYWORD for param in signature.parameters.values()):
-            return params
+            return sanitized_params
 
         allowed_keys = {
             name
@@ -332,7 +365,7 @@ class AgentOrchestrator:
             if name != "user_id"
             and param.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)
         }
-        return {key: value for key, value in params.items() if key in allowed_keys}
+        return {key: value for key, value in sanitized_params.items() if key in allowed_keys}
 
     @staticmethod
     def _find_missing_required_params(tool_fn: Any, params: dict[str, Any]) -> list[str]:
@@ -573,7 +606,8 @@ class AgentOrchestrator:
         failed = [item for item in state.tool_results if not item.success]
         if not successful:
             if state.plan and not state.plan.tools_required:
-                message = self._generate_conversational_reply(state)
+                contextual_message = self._generate_contextual_follow_up_reply(state)
+                message = contextual_message or self._generate_conversational_reply(state)
             elif failed:
                 error_text = " | ".join((item.error or "").lower() for item in failed)
                 missing_param_failures = [
@@ -681,6 +715,30 @@ class AgentOrchestrator:
                     message = f"Created '{title}' from {start_time} to {end_time}."
                 else:
                     message = f"Created '{title}'."
+            elif first.tool_name == "serp_search":
+                result = first.result or {}
+                query = result.get("query") or "your query"
+                count = int(result.get("count") or 0)
+                top_results = list(result.get("results") or [])
+                if count == 0 or not top_results:
+                    message = f"I searched Google for '{query}', but no results were returned."
+                else:
+                    preview = []
+                    for item in top_results[:3]:
+                        title = str(item.get("title") or "Untitled result")
+                        link = str(item.get("link") or "")
+                        preview.append(f"{title} ({link})" if link else title)
+                    message = (
+                        f"I found {count} Google result(s) for '{query}'. "
+                        f"Top results: {'; '.join(preview)}"
+                    )
+            elif first.tool_name == "save_search_note":
+                note = (first.result or {}).get("note") or {}
+                query = note.get("query") or "your search"
+                message = f"Saved a note for search '{query}'."
+            elif first.tool_name == "list_search_notes":
+                count = int((first.result or {}).get("count") or 0)
+                message = f"I found {count} saved search note(s)."
             else:
                 message = f"Completed using {first.tool_name}."
 
@@ -690,6 +748,69 @@ class AgentOrchestrator:
         )
         state.current_node = "response_generator"
         state.metadata.nodes_executed.append("response_generator")
+
+    def _generate_contextual_follow_up_reply(self, state: AgentState) -> str | None:
+        """Handle short anaphoric follow-ups using recent in-session context when possible."""
+        user_text = (state.user_input.content or "").strip().lower()
+        if not self._is_name_results_follow_up(user_text):
+            return None
+
+        query, titles = self._extract_recent_search_titles_from_context(state)
+        if not titles:
+            return None
+
+        numbered = "\n".join(f"{idx}. {title}" for idx, title in enumerate(titles, start=1))
+        if query:
+            return f"Here are the results I found for '{query}':\n{numbered}"
+        return f"Here are the result names:\n{numbered}"
+
+    @staticmethod
+    def _is_name_results_follow_up(user_text: str) -> bool:
+        patterns = [
+            r"\bcan you name them\b",
+            r"\bname them\b",
+            r"\blist them\b",
+            r"\bwhat are they\b",
+            r"\bwhich ones\b",
+            r"\bname (those|these)\b",
+        ]
+        return any(re.search(pattern, user_text) for pattern in patterns)
+
+    @staticmethod
+    def _extract_recent_search_titles_from_context(state: AgentState) -> tuple[str | None, list[str]]:
+        """Extract titles from the latest assistant message that contains a serp summary."""
+        user_context = dict((state.user_input.context or {}).get("user_context") or {})
+        conversation_context = dict(user_context.get("conversation_context") or {})
+        recent_turns = conversation_context.get("recent_turns")
+
+        if not isinstance(recent_turns, list):
+            return None, []
+
+        for turn in reversed(recent_turns):
+            if not isinstance(turn, dict):
+                continue
+            if str(turn.get("role") or "").lower() != "assistant":
+                continue
+
+            content = str(turn.get("content") or "").strip()
+            if "Top results:" not in content:
+                continue
+
+            query_match = re.search(r"Google result\(s\) for '([^']+)'", content)
+            query = query_match.group(1).strip() if query_match else None
+            _, _, raw_results = content.partition("Top results:")
+            candidates = [item.strip() for item in raw_results.split(";") if item.strip()]
+
+            titles: list[str] = []
+            for candidate in candidates:
+                title = re.sub(r"\s*\(https?://[^)]*\)\s*$", "", candidate).strip()
+                if title:
+                    titles.append(title)
+
+            if titles:
+                return query, titles
+
+        return None, []
 
     def _generate_conversational_reply(self, state: AgentState) -> str:
         """Generate a natural assistant response when no tools are required."""
@@ -703,7 +824,7 @@ class AgentOrchestrator:
             )
 
         prompt = (
-            "You are a practical personal assistant. Respond naturally and conversationally. "
+            f"You are {settings.assistant_name}, a practical personal assistant. Respond naturally and conversationally. "
             "The user wants normal chat guidance as well as help with planning, calendar, emails, and tasks. "
             "Give concise, actionable suggestions. "
             "If useful, propose a short step-by-step plan. "
@@ -730,11 +851,15 @@ class AgentOrchestrator:
         )
 
     @staticmethod
-    def _build_user_context(user: User) -> dict[str, Any]:
+    def _build_user_context(
+        user: User,
+        conversation_context: dict[str, Any] | None = None,
+        external_context: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         preferences = dict(user.preferences or {})
         profile = dict(preferences.get("assistant_profile") or {})
 
-        return {
+        resolved_context = {
             "user_id": user.id,
             "name": user.name,
             "email": user.email,
@@ -747,7 +872,50 @@ class AgentOrchestrator:
             "communication_tone": profile.get("communication_tone") or preferences.get("tone"),
             "role_context": profile.get("role_context"),
             "ai_instructions": profile.get("ai_instructions"),
+            "conversation_context": conversation_context or {},
+            "assistant_name": settings.assistant_name,
         }
+
+        if isinstance(external_context, dict):
+            ui_context = dict(external_context.get("ui") or {})
+            if ui_context:
+                resolved_context["ui"] = ui_context
+
+            explicit_context = dict(external_context.get("explicit") or {})
+            for key in ["role_context", "ai_instructions", "communication_tone", "language"]:
+                value = explicit_context.get(key)
+                if isinstance(value, str) and value.strip():
+                    resolved_context[key] = value.strip()
+
+        return resolved_context
+
+    def _persist_conversation_turns(
+        self,
+        *,
+        memory_service: ConversationMemoryService,
+        user: User,
+        state: AgentState,
+        user_message: str,
+    ) -> None:
+        """Persist message pair without blocking main agent response flow."""
+        assistant_message = state.response.message if state.response else ""
+        try:
+            memory_service.persist_turn_pair(
+                user=user,
+                session_id=state.session_id,
+                user_message=user_message,
+                assistant_message=assistant_message,
+                trace_id=state.trace_id,
+                tool_results=[item.model_dump(mode="json") for item in state.tool_results],
+                approval_id=state.pending_approval.approval_id if state.pending_approval else None,
+            )
+        except Exception:
+            self.db.rollback()
+            logger.warning(
+                "orchestration.persist_conversation_turns.failed",
+                extra={"trace_id": state.trace_id, "user_id": state.user_id},
+                exc_info=True,
+            )
 
     def _persist_state(self, state: AgentState) -> None:
         try:

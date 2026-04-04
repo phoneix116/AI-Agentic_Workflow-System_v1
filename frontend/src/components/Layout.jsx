@@ -14,7 +14,7 @@ import UserProfileModal from './UserProfileModal'
  * Semantic structure: nav + main (content)
  * Responsive: stacks vertically, top nav always visible
  */
-function LayoutContent({ onLogout }) {
+function LayoutContent({ onLogout, onNavigate }) {
   const { modals, closeModal } = useModal()
 
   return (
@@ -32,7 +32,7 @@ function LayoutContent({ onLogout }) {
       </a>
 
       {/* Top Navigation */}
-      <TopNav onLogout={onLogout} />
+      <TopNav onLogout={onLogout} onNavigate={onNavigate} />
 
       {/* Main Content Region */}
       <main 
@@ -62,10 +62,10 @@ function LayoutContent({ onLogout }) {
   )
 }
 
-export default function Layout({ onLogout }) {
+export default function Layout({ onLogout, onNavigate }) {
   return (
     <ModalProvider>
-      <LayoutContent onLogout={onLogout} />
+      <LayoutContent onLogout={onLogout} onNavigate={onNavigate} />
     </ModalProvider>
   )
 }

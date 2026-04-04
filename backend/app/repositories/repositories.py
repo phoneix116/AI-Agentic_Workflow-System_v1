@@ -6,7 +6,17 @@ from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
 import logging
 
-from app.db.models import User, Task, CalendarEvent, Email, Message, Approval, AgentRun
+from app.db.models import (
+    User,
+    Task,
+    CalendarEvent,
+    Email,
+    Message,
+    Approval,
+    AgentRun,
+    ConversationSession,
+    ConversationTurn,
+)
 from app.repositories.base import BaseRepository
 
 logger = logging.getLogger(__name__)
@@ -325,6 +335,129 @@ class MessageRepository(BaseRepository[Message]):
     def get_by_external_id(self, external_id: str) -> Optional[Message]:
         """Get message by external provider ID."""
         return self.find_one(external_id=external_id)
+
+
+class ConversationSessionRepository(BaseRepository[ConversationSession]):
+    """Repository for conversation sessions."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, ConversationSession)
+
+    def get_by_user_session_id(self, user_id: str, session_id: str) -> Optional[ConversationSession]:
+        """Get conversation session for a user by stable client session ID."""
+        return self.session.query(self.model_class).filter(
+            and_(
+                self.model_class.user_id == user_id,
+                self.model_class.session_id == session_id,
+            )
+        ).first()
+
+    def get_or_create(self, user_id: str, session_id: str) -> ConversationSession:
+        """Get existing session or create one for the user."""
+        existing = self.get_by_user_session_id(user_id=user_id, session_id=session_id)
+        if existing:
+            return existing
+        return self.create(user_id=user_id, session_id=session_id)
+
+    def touch_activity(self, conversation_session: ConversationSession) -> None:
+        """Update last activity timestamp for session recency queries."""
+        conversation_session.last_activity_at = datetime.utcnow()
+        self.session.flush()
+
+
+class ConversationTurnRepository(BaseRepository[ConversationTurn]):
+    """Repository for conversation turn persistence and retrieval."""
+
+    def __init__(self, session: Session):
+        super().__init__(session, ConversationTurn)
+
+    def add_turn(
+        self,
+        *,
+        user_id: str,
+        conversation_session_id: str,
+        session_id: str,
+        role: ConversationTurn.Role,
+        content: str,
+        assistant_summary: Optional[str] = None,
+        metadata_json: Optional[dict[str, Any]] = None,
+        trace_id: Optional[str] = None,
+    ) -> ConversationTurn:
+        """Persist one conversation turn."""
+        return self.create(
+            user_id=user_id,
+            conversation_session_id=conversation_session_id,
+            session_id=session_id,
+            role=role,
+            content=content,
+            assistant_summary=assistant_summary,
+            metadata_json=metadata_json,
+            trace_id=trace_id,
+        )
+
+    def get_recent_for_session(self, user_id: str, session_id: str, limit: int = 10) -> List[ConversationTurn]:
+        """Get latest turns for one user session in chronological order."""
+        rows = self.session.query(self.model_class).filter(
+            and_(
+                self.model_class.user_id == user_id,
+                self.model_class.session_id == session_id,
+            )
+        ).order_by(desc(self.model_class.created_at)).limit(limit).all()
+        return list(reversed(rows))
+
+    def get_last_user_turn(self, user_id: str) -> Optional[ConversationTurn]:
+        """Get latest user-authored turn for a user."""
+        return self.session.query(self.model_class).filter(
+            and_(
+                self.model_class.user_id == user_id,
+                self.model_class.role == ConversationTurn.Role.USER,
+            )
+        ).order_by(desc(self.model_class.created_at)).first()
+
+    def get_user_turns(self, user_id: str, skip: int = 0, limit: int = 50) -> List[ConversationTurn]:
+        """List turns for a user across sessions, newest first."""
+        return self.session.query(self.model_class).filter(
+            self.model_class.user_id == user_id
+        ).order_by(desc(self.model_class.created_at)).offset(skip).limit(limit).all()
+
+    def get_user_turns_for_session(
+        self,
+        user_id: str,
+        session_id: str,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> List[ConversationTurn]:
+        """List turns for one user session, newest first."""
+        return self.session.query(self.model_class).filter(
+            and_(
+                self.model_class.user_id == user_id,
+                self.model_class.session_id == session_id,
+            )
+        ).order_by(desc(self.model_class.created_at)).offset(skip).limit(limit).all()
+
+    def count_user_turns(self, user_id: str, session_id: Optional[str] = None) -> int:
+        """Count turns for a user, optionally scoped to session."""
+        query = self.session.query(self.model_class).filter(self.model_class.user_id == user_id)
+        if session_id:
+            query = query.filter(self.model_class.session_id == session_id)
+        return query.count()
+
+    def get_recent_user_turns(self, user_id: str, limit: int = 200) -> List[ConversationTurn]:
+        """Get recent user turns for semantic retrieval source corpus."""
+        return self.session.query(self.model_class).filter(
+            and_(
+                self.model_class.user_id == user_id,
+                self.model_class.role == ConversationTurn.Role.USER,
+            )
+        ).order_by(desc(self.model_class.created_at)).limit(limit).all()
+
+    def prune_before(self, cutoff: datetime) -> int:
+        """Delete turns older than cutoff and return deleted row count."""
+        deleted = self.session.query(self.model_class).filter(
+            self.model_class.created_at < cutoff
+        ).delete(synchronize_session=False)
+        self.session.flush()
+        return int(deleted or 0)
 
 
 class ApprovalRepository(BaseRepository[Approval]):

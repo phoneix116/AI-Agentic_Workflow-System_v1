@@ -245,7 +245,7 @@ class GoogleCalendarService:
             from google.oauth2.credentials import Credentials
 
             credentials = Credentials(token=access_token)
-            service = build("calendar", "v3", credentials=credentials)
+            service = build("calendar", "v3", credentials=credentials, cache_discovery=False)
             return service
         except Exception as e:
             logger.error(f"Failed to build calendar service: {str(e)}")
@@ -274,19 +274,29 @@ class GoogleCalendarService:
         try:
             service = self.build_calendar_service(access_token)
 
-            events_result = self._execute_google_call(
-                "fetch_user_events",
-                lambda: service.events().list(
-                    calendarId="primary",
-                    timeMin=time_min.isoformat().replace("+00:00", "Z"),
-                    timeMax=time_max.isoformat().replace("+00:00", "Z"),
-                    maxResults=max_results,
-                    singleEvents=True,
-                    orderBy="startTime",
-                ).execute(),
-            )
+            events: List[Dict[str, Any]] = []
+            page_token: Optional[str] = None
+            while True:
+                events_result = self._execute_google_call(
+                    "fetch_user_events",
+                    lambda: service.events().list(
+                        calendarId="primary",
+                        timeMin=time_min.isoformat().replace("+00:00", "Z"),
+                        timeMax=time_max.isoformat().replace("+00:00", "Z"),
+                        maxResults=max_results,
+                        singleEvents=True,
+                        orderBy="startTime",
+                        pageToken=page_token,
+                    ).execute(),
+                )
 
-            events = events_result.get("items", [])
+                items = events_result.get("items", [])
+                if items:
+                    events.extend(items)
+                page_token = events_result.get("nextPageToken")
+                if not page_token:
+                    break
+
             logger.info(f"Fetched {len(events)} events from primary calendar")
             return events
 
@@ -537,4 +547,13 @@ class GoogleCalendarService:
                 for att in google_event.get("attendees", [])
             ],
             "reminders": google_event.get("reminders", {}).get("overrides", []),
+            "html_link": google_event.get("htmlLink"),
+            "hangout_link": google_event.get("hangoutLink"),
+            "conference_link": ((google_event.get("conferenceData") or {}).get("entryPoints") or [{}])[0].get("uri"),
+            "organizer": (google_event.get("organizer") or {}).get("email"),
+            "attendee_statuses": {
+                str(att.get("email") or ""): str(att.get("responseStatus") or "needsAction")
+                for att in google_event.get("attendees", [])
+                if att.get("email")
+            },
         }

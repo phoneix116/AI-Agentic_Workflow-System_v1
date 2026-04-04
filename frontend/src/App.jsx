@@ -1,15 +1,37 @@
 import { useState, useEffect } from 'react'
 import Layout from './components/Layout'
 import Login from './components/Login'
+import ProductivityPage from './components/ProductivityPage'
+import { ASSISTANT_NAME } from './lib/branding'
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isCheckingAuth, setIsCheckingAuth] = useState(true)
   const [oauthError, setOauthError] = useState('')
+  const [route, setRoute] = useState(window.location.pathname || '/')
 
   useEffect(() => {
     checkAuthentication()
   }, [])
+
+  useEffect(() => {
+    const onPopState = () => {
+      setRoute(window.location.pathname || '/')
+    }
+
+    window.addEventListener('popstate', onPopState)
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+    }
+  }, [])
+
+  const navigate = (path) => {
+    if (!path || path === route) {
+      return
+    }
+    window.history.pushState({}, '', path)
+    setRoute(path)
+  }
 
   const checkAuthentication = () => {
     const params = new URLSearchParams(window.location.search)
@@ -48,7 +70,7 @@ export default function App() {
           <div className="h-12 w-12 mx-auto mb-4 rounded-xl gradient-primary flex items-center justify-center animate-pulse">
             <span className="text-2xl">🧠</span>
           </div>
-          <p className="text-text-secondary">Loading Astra...</p>
+          <p className="text-text-secondary">Loading {ASSISTANT_NAME}...</p>
         </div>
       </div>
     )
@@ -58,6 +80,10 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} initialError={oauthError} />
   }
 
-  return <Layout onLogout={handleLogout} />
+  if (route === '/productivity') {
+    return <ProductivityPage onBack={() => navigate('/')} />
+  }
+
+  return <Layout onLogout={handleLogout} onNavigate={navigate} />
 }
 

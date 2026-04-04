@@ -40,6 +40,24 @@ logger = logging.getLogger(__name__)
 calendar_service = GoogleCalendarService()
 
 
+def _is_missing_table_error(error: Exception) -> bool:
+    """Best-effort detection for missing DB table errors across DB drivers."""
+    message = str(error)
+    if "UndefinedTable" in message:
+        return True
+
+    original = getattr(error, "orig", None)
+    if getattr(original, "pgcode", None) == "42P01":
+        return True
+    if getattr(original, "sqlstate", None) == "42P01":
+        return True
+
+    lowered = message.lower()
+    return ("does not exist" in lowered) and (
+        "relation" in lowered or "table" in lowered
+    )
+
+
 def _parse_oauth_expiry(value: Optional[str]) -> Optional[datetime]:
     if not value:
         return None
@@ -117,6 +135,29 @@ def _to_calendar_event_schema(
         status = EventStatus.CONFIRMED
 
     now = datetime.utcnow()
+    attendees_raw = parsed_event.get("attendees") or []
+    attendees: list[str] = []
+    for attendee in attendees_raw:
+        if isinstance(attendee, str):
+            value = attendee.strip()
+            if value:
+                attendees.append(value)
+            continue
+        if isinstance(attendee, dict):
+            value = str(attendee.get("email") or "").strip()
+            if value:
+                attendees.append(value)
+
+    metadata = {
+        "all_day": bool(parsed_event.get("all_day")),
+        "html_link": parsed_event.get("html_link"),
+        "hangout_link": parsed_event.get("hangout_link"),
+        "conference_link": parsed_event.get("conference_link"),
+        "organizer": parsed_event.get("organizer"),
+        "attendee_statuses": parsed_event.get("attendee_statuses") or {},
+        "reminders": parsed_event.get("reminders") or [],
+    }
+
     return CalendarEventSchema(
         id=str(uuid.uuid4()),
         user_id=user_id,
@@ -127,12 +168,12 @@ def _to_calendar_event_schema(
         end_time=parsed_event["end_time"],
         timezone=timezone,
         location=parsed_event.get("location"),
-        attendees=parsed_event.get("attendees") or [],
+        attendees=attendees,
         status=status,
         recurrence=None,
         color=parsed_event.get("color_id"),
         ai_generated=False,
-        metadata=None,
+        metadata=metadata,
         created_at=now,
         updated_at=now,
         trace_id=None,
@@ -141,6 +182,33 @@ def _to_calendar_event_schema(
 
 def _db_event_to_calendar_event_schema(event: CalendarEvent, timezone: str) -> CalendarEventSchema:
     """Build response schema from persisted CalendarEvent row."""
+    attendees_raw = event.attendees or []
+    attendees: list[str] = []
+    for attendee in attendees_raw:
+        if isinstance(attendee, str):
+            value = attendee.strip()
+            if value:
+                attendees.append(value)
+            continue
+        if isinstance(attendee, dict):
+            value = str(attendee.get("email") or "").strip()
+            if value:
+                attendees.append(value)
+
+    attendee_statuses: dict[str, str] = {}
+    for attendee in attendees_raw:
+        if isinstance(attendee, dict):
+            email = str(attendee.get("email") or "").strip()
+            status_value = str(attendee.get("status") or "needsAction").strip()
+            if email:
+                attendee_statuses[email] = status_value
+
+    metadata = {
+        "all_day": bool(event.all_day),
+        "attendee_statuses": attendee_statuses,
+        "reminders": event.reminders or [],
+    }
+
     return CalendarEventSchema(
         id=event.id,
         user_id=event.user_id,
@@ -151,12 +219,12 @@ def _db_event_to_calendar_event_schema(event: CalendarEvent, timezone: str) -> C
         end_time=event.end_time,
         timezone=timezone,
         location=event.location,
-        attendees=event.attendees or [],
+        attendees=attendees,
         status=EventStatus(event.status.value if hasattr(event.status, "value") else str(event.status).lower()),
         recurrence=None,
         color=event.color_id,
         ai_generated=False,
-        metadata=None,
+        metadata=metadata,
         created_at=event.created_at,
         updated_at=event.updated_at,
         trace_id=None,
@@ -393,6 +461,7 @@ async def get_daily_schedule(
                         location=parsed_event["location"],
                         attendees=parsed_event["attendees"],
                         color_id=parsed_event["color_id"],
+                        reminders=parsed_event.get("reminders"),
                         status=parsed_event["status"],
                     )
                 else:
@@ -404,6 +473,9 @@ async def get_daily_schedule(
                         end_time=parsed_event["end_time"],
                         location=parsed_event["location"],
                         attendees=parsed_event["attendees"],
+                        color_id=parsed_event["color_id"],
+                        reminders=parsed_event.get("reminders"),
+                        status=parsed_event["status"],
                     )
 
             db.commit()
@@ -420,7 +492,7 @@ async def get_daily_schedule(
             ]
         except Exception as db_error:
             db.rollback()
-            if "UndefinedTable" not in str(db_error):
+            if not _is_missing_table_error(db_error):
                 raise
             logger.warning(
                 "calendar.daily_schedule.db_unavailable_fallback user=%s error=%s",
@@ -446,6 +518,11 @@ async def get_daily_schedule(
             timezone=payload.timezone,
         )
 
+    except pytz.UnknownTimeZoneError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid timezone",
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -526,7 +603,7 @@ async def find_free_slots(
             ]
         except Exception as db_error:
             db.rollback()
-            if "UndefinedTable" not in str(db_error):
+            if not _is_missing_table_error(db_error):
                 raise
 
             logger.warning(
@@ -625,6 +702,11 @@ async def find_free_slots(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid time format"
         )
+    except pytz.UnknownTimeZoneError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid timezone",
+        )
     except Exception as e:
         logger.error(f"Failed to find free slots: {str(e)}", exc_info=True)
         raise HTTPException(
@@ -689,7 +771,7 @@ async def create_calendar_event(
             db.commit()
         except Exception as db_error:
             db.rollback()
-            if "UndefinedTable" not in str(db_error):
+            if not _is_missing_table_error(db_error):
                 raise
             logger.warning(
                 "calendar.create_event.approval_table_unavailable_fallback user=%s error=%s",

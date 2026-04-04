@@ -122,6 +122,11 @@ class ContextBlock(BaseModel):
         default=None,
         description="User preferences (working hours, tone, etc.)"
     )
+
+    conversation_context: Optional[dict] = Field(
+        default=None,
+        description="Recent turns and semantic memories for continuity"
+    )
     
     # Metadata
     context_collection_time: datetime = Field(
@@ -408,6 +413,7 @@ class StateBuilder:
         events: Optional[list[CalendarEventSnapshot]] = None,
         tasks: Optional[list[TaskSnapshot]] = None,
         user_prefs: Optional[dict] = None,
+        conversation_context: Optional[dict] = None,
     ) -> AgentState:
         """Populate context block with real data."""
         state.context = ContextBlock(
@@ -418,6 +424,7 @@ class StateBuilder:
             today_schedule=events or [],
             open_tasks=tasks or [],
             user_preferences=user_prefs,
+            conversation_context=conversation_context,
         )
         return state
     

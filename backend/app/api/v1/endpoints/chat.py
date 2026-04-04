@@ -7,12 +7,14 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import Query
 from sqlalchemy.orm import Session
 
 from app.agent.orchestration import AgentOrchestrator
 from app.core.auth import TokenPayload, get_current_user
 from app.db.config import get_db
 from app.db.models import User
+from app.services.conversation_memory import ConversationMemoryService
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -86,12 +88,14 @@ async def process_chat_message(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Message cannot be empty")
 
     session_id = payload.get("conversation_id") or payload.get("session_id") or str(uuid4())
+    external_context = payload.get("context") if isinstance(payload.get("context"), dict) else None
 
     orchestrator = AgentOrchestrator(db)
     state = orchestrator.execute_chat(
         user=current_user,
         message=str(content),
         session_id=session_id,
+        external_context=external_context,
     )
 
     provider_status = _provider_status(current_user)
@@ -126,13 +130,48 @@ async def process_chat_message(
 @router.get("/messages", summary="Get chat history")
 async def get_chat_messages(
     current_user: User = Depends(get_current_user_from_db),
+    db: Session = Depends(get_db),
+    session_id: str | None = Query(default=None, description="Optional conversation/session ID"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, Any]:
-    """Return a minimal history placeholder until persistent chat history is wired."""
+    """Return persisted chat history for current user."""
+    memory_service = ConversationMemoryService(db)
+    rows, total_count = memory_service.get_history(
+        user_id=current_user.id,
+        session_id=session_id,
+        skip=offset,
+        limit=limit,
+    )
+
+    messages: list[dict[str, Any]] = []
+    for row in rows:
+        role_value = row.role.value if hasattr(row.role, "value") else str(row.role)
+        metadata = row.metadata_json or {}
+        messages.append(
+            {
+                "id": row.id,
+                "role": role_value,
+                "content": row.content,
+                "timestamp": row.created_at,
+                "user_id": row.user_id,
+                "trace_id": row.trace_id,
+                "tool_calls": metadata.get("tool_results"),
+                "approval_required": bool(metadata.get("approval_id")),
+                "approval_id": metadata.get("approval_id"),
+                "metadata": {
+                    "assistant_summary": row.assistant_summary,
+                    "session_id": row.session_id,
+                },
+            }
+        )
+
     return {
-        "messages": [],
-        "total_count": 0,
-        "offset": 0,
-        "limit": 50,
-        "has_more": False,
+        "messages": messages,
+        "total_count": total_count,
+        "offset": offset,
+        "limit": limit,
+        "has_more": (offset + limit) < total_count,
         "user_id": current_user.id,
+        "session_id": session_id,
     }

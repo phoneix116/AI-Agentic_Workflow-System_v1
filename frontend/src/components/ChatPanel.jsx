@@ -57,6 +57,34 @@ function formatToolResultPreview(result) {
     return `Loaded ${events.length} calendar event(s).`
   }
 
+  if (result.tool_name === 'serp_search') {
+    const count = payload.count ?? 0
+    const items = Array.isArray(payload.results) ? payload.results.slice(0, 3) : []
+    if (items.length === 0) {
+      return `Google search returned ${count} result(s).`
+    }
+    const preview = items
+      .map((item) => item?.title)
+      .filter(Boolean)
+      .join(', ')
+    return `${count} web result(s): ${preview}${count > items.length ? '...' : ''}`
+  }
+
+  if (result.tool_name === 'save_search_note') {
+    const note = payload.note || {}
+    return `Saved search note for: ${note.query || 'Untitled query'}`
+  }
+
+  if (result.tool_name === 'list_search_notes') {
+    const count = payload.count ?? 0
+    const notes = Array.isArray(payload.notes) ? payload.notes.slice(0, 3) : []
+    const preview = notes
+      .map((note) => note?.query)
+      .filter(Boolean)
+      .join(', ')
+    return preview ? `${count} saved search note(s): ${preview}${count > notes.length ? '...' : ''}` : `${count} saved search note(s).`
+  }
+
   return JSON.stringify(payload).slice(0, 180)
 }
 
@@ -90,6 +118,8 @@ export default function ChatPanel() {
     'Plan my day',
     'Show urgent tasks',
     'Find free slots tomorrow morning',
+    'Search Google for AI agent workflows',
+    'Save this search as a note: AI agent workflows',
   ]
 
   // Auto-scroll to latest message
@@ -131,6 +161,13 @@ export default function ChatPanel() {
         body: JSON.stringify({
           message: trimmedInput,
           conversation_id: conversationIdRef.current,
+          context: {
+            ui: {
+              surface: 'dashboard_chat_panel',
+              locale: window.navigator.language || 'en-US',
+              timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+            },
+          },
         }),
       })
       let assistantText = data.message || data.response?.message || 'Request completed.'
@@ -243,7 +280,7 @@ export default function ChatPanel() {
         <div>
           <h2 className="text-base font-semibold md:text-lg">Assistant chat</h2>
           <p className="text-xs text-text-secondary md:text-sm">
-            Ask for inbox summaries, planning help, and schedule checks.
+            Ask for inbox summaries, planning help, schedule checks, or Google web searches.
           </p>
         </div>
         <div className="flex items-center gap-2">

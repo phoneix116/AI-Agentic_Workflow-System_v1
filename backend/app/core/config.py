@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     # APPLICATION SETTINGS
     # =====================================================================
     app_name: str = "AI Personal Assistant API"
+    assistant_name: str = "Astra"
     app_env: str = "development"
     app_debug: bool = True
     api_prefix: str = "/api"
@@ -37,6 +38,23 @@ class Settings(BaseSettings):
     redis_cache_url: str = "redis://localhost:6379/1"
     redis_session_ttl: int = 3600
     redis_cache_ttl: int = 1800
+
+    # =====================================================================
+    # CONVERSATION MEMORY SETTINGS
+    # =====================================================================
+    conversation_history_window: int = 10
+    conversation_semantic_top_k: int = 5
+    conversation_retention_days: int = 30
+    conversation_cache_ttl_seconds: int = 900
+    conversation_cleanup_interval_seconds: int = 3600
+    conversation_vector_enabled: bool = True
+    conversation_vector_dim: int = 64
+    conversation_hybrid_weight_lexical: float = 0.6
+    conversation_hybrid_weight_vector: float = 0.4
+
+    # Optional semantic store (Elasticsearch).
+    elasticsearch_url: str = "http://localhost:9200"
+    elasticsearch_index_conversation: str = "conversation_memory"
 
     # =====================================================================
     # JWT & AUTHENTICATION SETTINGS
@@ -75,7 +93,7 @@ class Settings(BaseSettings):
     # =====================================================================
     # EXTERNAL API SETTINGS
     # =====================================================================
-    gmail_api_scopes: str = "https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.send"
+    gmail_api_scopes: str = "https://www.googleapis.com/auth/gmail.readonly,https://www.googleapis.com/auth/gmail.send,https://www.googleapis.com/auth/gmail.modify"
     gmail_max_results: int = 10
 
     calendar_api_scopes: str = "https://www.googleapis.com/auth/calendar.readonly,https://www.googleapis.com/auth/calendar.events"
@@ -84,6 +102,7 @@ class Settings(BaseSettings):
     whatsapp_business_phone_id: str = ""
 
     openweather_api_key: str = ""
+    serpapi_api_key: str = ""
 
     # =====================================================================
     # LOGGING SETTINGS

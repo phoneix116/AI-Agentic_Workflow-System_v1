@@ -31,6 +31,10 @@ from app.core.retry import RetryExhaustedError, retry_sync
 logger = logging.getLogger(__name__)
 
 
+class GmailInsufficientScopeError(Exception):
+    """Raised when Gmail token does not include required API scopes."""
+
+
 class GmailOAuthManager:
     """Manages Gmail OAuth 2.0 flow and token lifecycle."""
     
@@ -247,7 +251,7 @@ class GmailClient:
                 },
             )
             return result
-        except RetryExhaustedError:
+        except RetryExhaustedError as exc:
             duration_ms = (perf_counter() - start) * 1000
             metrics_collector.record_external_call(
                 service="gmail_api",
@@ -256,6 +260,21 @@ class GmailClient:
                 duration_ms=duration_ms,
                 attempts=attempts,
             )
+
+            root_error = exc.__cause__ if isinstance(exc.__cause__, Exception) else None
+            if self._is_insufficient_scope_error(root_error):
+                logger.warning(
+                    "gmail.external_call.insufficient_scope",
+                    extra={
+                        "trace_id": trace_id,
+                        "operation": operation,
+                        "duration_ms": round(duration_ms, 2),
+                    },
+                )
+                raise GmailInsufficientScopeError(
+                    "Gmail account is missing required modify permissions"
+                ) from root_error
+
             logger.error(
                 "gmail.external_call.retry_exhausted",
                 extra={
@@ -266,6 +285,36 @@ class GmailClient:
                 exc_info=True,
             )
             raise
+
+    @staticmethod
+    def _is_insufficient_scope_error(error: Exception | None) -> bool:
+        """Detect Gmail insufficient-scope errors returned as HTTP 403 responses."""
+        if not isinstance(error, HttpError):
+            return False
+
+        status_code = getattr(getattr(error, "resp", None), "status", None)
+        if status_code != 403:
+            return False
+
+        error_text = str(error).lower()
+        if (
+            "insufficient authentication scopes" in error_text
+            or "insufficient permission" in error_text
+            or "insufficientpermissions" in error_text
+        ):
+            return True
+
+        raw_content = getattr(error, "content", b"")
+        if isinstance(raw_content, bytes):
+            content_text = raw_content.decode("utf-8", errors="ignore").lower()
+        else:
+            content_text = str(raw_content).lower()
+
+        return (
+            "insufficient authentication scopes" in content_text
+            or "insufficient permission" in content_text
+            or "insufficientpermissions" in content_text
+        )
     
     def fetch_emails(
         self,
@@ -503,6 +552,11 @@ class GmailClient:
                 ).execute(),
             )
             return True
+        except GmailInsufficientScopeError:
+            raise
+        except RetryExhaustedError as error:
+            logger.error(f"Error marking message as read after retries: {error}")
+            return False
         except HttpError as error:
             logger.error(f"Error marking message as read: {error}")
             return False
@@ -519,6 +573,12 @@ class GmailClient:
                 ).execute(),
             )
             return True
+        except GmailInsufficientScopeError as error:
+            logger.warning(f"Skipping important mark due to missing Gmail scope: {error}")
+            return False
+        except RetryExhaustedError as error:
+            logger.error(f"Error marking message as important after retries: {error}")
+            return False
         except HttpError as error:
             logger.error(f"Error marking message as important: {error}")
             return False

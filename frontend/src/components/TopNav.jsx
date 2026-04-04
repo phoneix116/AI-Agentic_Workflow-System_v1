@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useModal } from '../lib/ModalContext'
 import { apiRequest } from '../lib/apiClient'
+import { ASSISTANT_NAME } from '../lib/branding'
 
 /**
  * Top Navigation Bar Component
@@ -8,7 +9,7 @@ import { apiRequest } from '../lib/apiClient'
  * Accessibility: ARIA labels, semantic nav structure
  * Responsive: horizontal layout
  */
-export default function TopNav({ onLogout }) {
+export default function TopNav({ onLogout, onNavigate }) {
   const { openModal } = useModal()
   const [profile, setProfile] = useState({
     name: 'User',
@@ -51,11 +52,18 @@ export default function TopNav({ onLogout }) {
   }, [])
 
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'messages', label: 'Notes', icon: '💬' },
-    { id: 'tasks', label: 'Tasks', icon: '✓' },
-    { id: 'calendar', label: 'Calendar', icon: '📅' },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊', type: 'modal' },
+    { id: 'messages', label: 'Notes', icon: '💬', type: 'modal' },
+    { id: 'productivity', label: 'Productivity', icon: '⚡', type: 'route', path: '/productivity' },
   ]
+
+  const handleNavigation = (item) => {
+    if (item.type === 'route') {
+      onNavigate?.(item.path)
+      return
+    }
+    openModal(item.id)
+  }
 
   const handleLogout = () => {
     onLogout?.()
@@ -71,7 +79,7 @@ export default function TopNav({ onLogout }) {
               <span className="text-white font-bold text-base glow">🧠</span>
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-sm font-bold text-text-primary">Astra</h1>
+              <h1 className="text-sm font-bold text-text-primary">{ASSISTANT_NAME}</h1>
               <p className="text-xs text-text-secondary">AI Assistant</p>
             </div>
           </div>
@@ -81,7 +89,7 @@ export default function TopNav({ onLogout }) {
             {navItems.map((item) => (
               <button
                 key={item.id}
-                onClick={() => openModal(item.id)}
+                onClick={() => handleNavigation(item)}
                 className="
                   touch-target flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium
                   text-text-secondary hover:text-text-primary hover:bg-white/5

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.auth import TokenPayload, get_current_user
+from app.cache.config import get_redis
 from app.db.config import get_db
 from app.db.models import User, Email
 from app.schemas.common import ApiResponse
@@ -257,6 +258,11 @@ async def update_user_profile(
     db.add(current_user)
     db.commit()
     db.refresh(current_user)
+
+    try:
+        get_redis().delete(f"cache:user:{current_user.id}:profile")
+    except Exception:
+        pass
 
     return ApiResponse(
         message="Profile updated",

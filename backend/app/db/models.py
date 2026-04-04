@@ -26,7 +26,6 @@ class User(Base):
     
     # Preferences
     preferences = Column(JSON, nullable=True, default={})  # {"language": "en", "notifications": true}
-    
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
@@ -38,6 +37,8 @@ class User(Base):
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
     approvals = relationship("Approval", back_populates="user", cascade="all, delete-orphan")
     agent_runs = relationship("AgentRun", back_populates="user", cascade="all, delete-orphan")
+    conversation_sessions = relationship("ConversationSession", back_populates="user", cascade="all, delete-orphan")
+    conversation_turns = relationship("ConversationTurn", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("idx_user_email", "email"),
@@ -377,4 +378,70 @@ class AgentRun(Base):
         Index("idx_agentrun_user_type", "user_id", "run_type"),
         Index("idx_agentrun_user_created", "user_id", "created_at"),
         Index("idx_agentrun_status", "status"),
+    )
+
+
+class ConversationSession(Base):
+    """Stable chat session identity for user conversations."""
+
+    __tablename__ = "conversation_sessions"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    session_id = Column(String(36), nullable=False)
+    title = Column(String(255), nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    last_activity_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="conversation_sessions")
+    turns = relationship("ConversationTurn", back_populates="session", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "session_id", name="uq_conversation_session_user_session"),
+        Index("idx_conversation_session_user_activity", "user_id", "last_activity_at"),
+    )
+
+
+class ConversationTurn(Base):
+    """Single persisted chat turn for user and assistant messages."""
+
+    __tablename__ = "conversation_turns"
+
+    class Role(str, enum.Enum):
+        USER = "user"
+        ASSISTANT = "assistant"
+        SYSTEM = "system"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversation_session_id = Column(
+        String(36),
+        ForeignKey("conversation_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    session_id = Column(String(36), nullable=False, index=True)
+    role = Column(
+        Enum(
+            Role,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+            name="conversationturnrole",
+        ),
+        nullable=False,
+    )
+    content = Column(Text, nullable=False)
+    assistant_summary = Column(Text, nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    trace_id = Column(String(36), nullable=True, index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    user = relationship("User", back_populates="conversation_turns")
+    session = relationship("ConversationSession", back_populates="turns")
+
+    __table_args__ = (
+        Index("idx_conversation_turn_user_created", "user_id", "created_at"),
+        Index("idx_conversation_turn_session_created", "session_id", "created_at"),
+        Index("idx_conversation_turn_created", "created_at"),
     )

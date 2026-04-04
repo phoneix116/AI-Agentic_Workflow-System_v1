@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiRequest } from '../lib/apiClient'
+import { ASSISTANT_NAME } from '../lib/branding'
 
 export default function Login({ onLoginSuccess, initialError = '' }) {
   const [isLoading, setIsLoading] = useState(false)
@@ -49,7 +50,7 @@ export default function Login({ onLoginSuccess, initialError = '' }) {
           <div className="h-16 w-16 mx-auto mb-4 rounded-2xl gradient-primary flex items-center justify-center shadow-glow">
             <span className="text-4xl font-bold text-white glow">🧠</span>
           </div>
-          <h1 className="text-3xl font-bold text-text-primary mb-2">Astra</h1>
+          <h1 className="text-3xl font-bold text-text-primary mb-2">{ASSISTANT_NAME}</h1>
           <p className="text-sm text-text-secondary">Your AI Assistant for Email, Calendar & Tasks</p>
         </div>
 

@@ -37,6 +37,9 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     """Service for email management and AI processing."""
+
+    _LATEST_EMAIL_ALIASES = {"latest", "recent", "newest", "last"}
+    _URGENT_EMAIL_ALIASES = {"urgent", "high", "critical", "important", "priority"}
     
     def __init__(self, db: Session):
         """Initialize email service."""
@@ -339,7 +342,7 @@ class EmailService:
         self,
         user: User,
         email_id: str,
-        recipient: str,
+        recipient: Optional[str] = None,
         tone: str = "professional",
         context: Optional[str] = None,
     ) -> Optional[EmailDraft]:
@@ -356,20 +359,41 @@ class EmailService:
         Returns:
             EmailDraft object or None if failed
         """
+        normalized_email_id = (email_id or "").strip()
+        if not normalized_email_id:
+            return None
+
         # Fetch original email
         gmail_client = self.get_gmail_client(user)
         if not gmail_client:
             return None
+
+        resolved_email_id = self._resolve_reply_email_id(
+            user=user,
+            gmail_client=gmail_client,
+            email_id=normalized_email_id,
+        )
+        if not resolved_email_id:
+            logger.warning(
+                "Unable to resolve reply target email id '%s' for user %s",
+                normalized_email_id,
+                user.id,
+            )
+            return None
         
-        email_details = gmail_client.get_message_details(email_id)
+        email_details = gmail_client.get_message_details(resolved_email_id)
         if not email_details:
+            return None
+
+        resolved_recipient = (recipient or "").strip() or email_details.get("from_address")
+        if not resolved_recipient:
             return None
         
         # Get thread ID from DB or API
         db_email = None
         try:
             db_email = self.db.query(Email).filter(
-                Email.gmail_message_id == email_id,
+                Email.gmail_message_id == resolved_email_id,
                 Email.user_id == user.id,
             ).first()
         except Exception as db_error:
@@ -379,14 +403,14 @@ class EmailService:
             logger.warning(
                 "Skipping local email lookup for draft generation user %s message %s: %s",
                 user.id,
-                email_id,
+                resolved_email_id,
                 db_error,
             )
 
         thread_id = (
             db_email.thread_id
             if db_email
-            else email_details.get("thread_id") or email_id
+            else email_details.get("thread_id") or resolved_email_id
         )
         
         # Generate draft using LLM
@@ -402,13 +426,14 @@ class EmailService:
         draft = EmailDraft(
             id="draft-" + datetime.utcnow().isoformat(),
             thread_id=thread_id,
-            to_recipient=recipient,
+            to_recipient=resolved_recipient,
             subject=None,  # Re: format handled client-side
             body=draft_body,
             tone=tone,
             confidence=confidence,
             metadata={
-                "original_email_id": email_id,
+                "original_email_id": resolved_email_id,
+                "requested_email_id": normalized_email_id,
                 "context": context,
                 "generated_at": datetime.utcnow().isoformat(),
             },
@@ -416,6 +441,43 @@ class EmailService:
         )
         
         return draft
+
+    def _resolve_reply_email_id(
+        self,
+        user: User,
+        gmail_client: GmailClient,
+        email_id: str,
+    ) -> Optional[str]:
+        """Resolve common planner aliases like latest/urgent into a real Gmail message ID."""
+        normalized = (email_id or "").strip()
+        if not normalized:
+            return None
+
+        lowered = normalized.lower()
+        if lowered in self._LATEST_EMAIL_ALIASES:
+            latest_emails = self.fetch_latest_emails(user, limit=1)
+            if latest_emails:
+                return latest_emails[0].get("id")
+            return None
+
+        if lowered in self._URGENT_EMAIL_ALIASES:
+            recent_emails = self.fetch_latest_emails(user, limit=20)
+            if not recent_emails:
+                return None
+
+            for email in recent_emails:
+                urgency = self._classify_email_urgency(
+                    user_id=user.id,
+                    subject=email.get("subject", ""),
+                    body=email.get("body_plain", "")[:500],
+                    from_address=email.get("from_address", ""),
+                )
+                if urgency.get("urgency_level") in {"high", "critical"}:
+                    return email.get("id")
+
+            return recent_emails[0].get("id")
+
+        return normalized
     
     def create_approval_for_draft(
         self,
