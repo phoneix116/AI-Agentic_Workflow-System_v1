@@ -61,6 +61,7 @@ tests/
 test_*.py
 *_test.py
 test-email-widget.py
+backend/pytest.ini
 *.spec.js
 *.spec.ts
 *.test.js
