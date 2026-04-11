@@ -9,28 +9,28 @@ export default {
       colors: {
         // Design System Colors
         primary: {
-          DEFAULT: '#3B82F6',
-          light: '#60A5FA',
-          dark: '#1D4ED8',
+          DEFAULT: '#66FCF1',
+          light: '#66FCF1',
+          dark: '#45A29E',
         },
         secondary: {
-          DEFAULT: '#0EA5E9',
-          light: '#38BDF8',
-          dark: '#0284C7',
+          DEFAULT: '#45A29E',
+          light: '#66FCF1',
+          dark: '#1F2833',
         },
         background: {
-          DEFAULT: '#0B1220',
-          card: 'rgba(15, 23, 42, 0.72)',
+          DEFAULT: '#0B0C10',
+          card: 'rgba(31, 40, 51, 0.76)',
         },
         text: {
-          primary: '#E2E8F0',
-          secondary: '#94A3B8',
-          tertiary: '#64748B',
+          primary: '#C5C6C7',
+          secondary: '#8E969F',
+          tertiary: '#66707A',
         },
       },
       gradients: {
-        'primary-gradient': 'linear-gradient(135deg, #1D4ED8, #0EA5E9)',
-        'glow-effect': 'radial-gradient(circle, rgba(59, 130, 246, 0.32), transparent)',
+        'primary-gradient': 'linear-gradient(135deg, #45A29E, #66FCF1)',
+        'glow-effect': 'radial-gradient(circle, rgba(102, 252, 241, 0.3), transparent)',
       },
       spacing: {
         'card': '16px',

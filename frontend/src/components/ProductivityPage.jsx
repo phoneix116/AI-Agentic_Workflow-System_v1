@@ -80,7 +80,7 @@ export default function ProductivityPage({ onBack }) {
     <div className="relative min-h-screen bg-background-DEFAULT px-4 py-6 text-text-primary md:px-8 md:py-8">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.2),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.18),_transparent_44%)]"
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,_rgba(69,162,158,0.22),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(102,252,241,0.18),_transparent_44%)]"
       />
 
       <div className="relative z-10 mx-auto max-w-5xl space-y-6">
@@ -102,7 +102,7 @@ export default function ProductivityPage({ onBack }) {
         </header>
 
         {error && (
-          <div className="rounded-lg border border-red-300/20 bg-red-500/10 px-4 py-3 text-sm text-red-100" role="alert">
+          <div className="rounded-lg border border-[#45A29E]/30 bg-[#45A29E]/10 px-4 py-3 text-sm text-[#B8FFFA]" role="alert">
             {error}
           </div>
         )}
@@ -122,13 +122,13 @@ export default function ProductivityPage({ onBack }) {
 
               <article className="glass rounded-xl border border-white/10 p-5">
                 <p className="text-xs uppercase tracking-[0.14em] text-text-secondary">Task completion</p>
-                <p className="mt-3 text-4xl font-black text-emerald-300">{data.taskCompletionRate}%</p>
+                <p className="mt-3 text-4xl font-black text-[#45A29E]">{data.taskCompletionRate}%</p>
                 <p className="mt-1 text-xs text-text-secondary">{data.completedTasks}/{Math.max(data.totalTasks, 1)} tasks completed.</p>
               </article>
 
               <article className="glass rounded-xl border border-white/10 p-5">
                 <p className="text-xs uppercase tracking-[0.14em] text-text-secondary">Inbox clear rate</p>
-                <p className="mt-3 text-4xl font-black text-sky-300">{data.inboxClearRate}%</p>
+                <p className="mt-3 text-4xl font-black text-[#66FCF1]">{data.inboxClearRate}%</p>
                 <p className="mt-1 text-xs text-text-secondary">{data.processedEmails}/{Math.max(data.totalEmails, 1)} emails processed.</p>
               </article>
             </section>
@@ -140,7 +140,7 @@ export default function ProductivityPage({ onBack }) {
                   <p>Open tasks: <span className="font-semibold text-text-primary">{data.totalTasks}</span></p>
                   <p>Completed: <span className="font-semibold text-text-primary">{data.completedTasks}</span></p>
                   <p>In progress: <span className="font-semibold text-text-primary">{data.inProgressTasks}</span></p>
-                  <p>Overdue: <span className="font-semibold text-red-200">{data.overdueTasks}</span></p>
+                  <p>Overdue: <span className="font-semibold text-[#66FCF1]">{data.overdueTasks}</span></p>
                 </div>
               </article>
 
@@ -148,8 +148,8 @@ export default function ProductivityPage({ onBack }) {
                 <h2 className="text-sm font-semibold">Inbox load</h2>
                 <div className="mt-4 space-y-3 text-sm text-text-secondary">
                   <p>Total emails: <span className="font-semibold text-text-primary">{data.totalEmails}</span></p>
-                  <p>Unread: <span className="font-semibold text-yellow-200">{data.unreadEmails}</span></p>
-                  <p>Urgent: <span className="font-semibold text-red-200">{data.urgentEmails}</span></p>
+                  <p>Unread: <span className="font-semibold text-[#66FCF1]">{data.unreadEmails}</span></p>
+                  <p>Urgent: <span className="font-semibold text-[#45A29E]">{data.urgentEmails}</span></p>
                   <p>Processed: <span className="font-semibold text-text-primary">{data.processedEmails}</span></p>
                 </div>
               </article>

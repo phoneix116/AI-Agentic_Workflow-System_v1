@@ -231,13 +231,13 @@ export default function CalendarWidget() {
       <div className="fixed inset-0 z-[999] isolate flex items-center justify-center bg-black px-4">
         <div className="relative mx-4 w-full max-w-sm overflow-hidden rounded-2xl border border-secondary/30 bg-slate-950 p-6 shadow-[0_24px_80px_rgba(2,6,23,0.95)] animate-scale-pop">
           <div className="pointer-events-none absolute -top-16 -right-14 h-40 w-40 rounded-full bg-secondary/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-green-400/15 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-20 -left-16 h-44 w-44 rounded-full bg-[#45A29E]/15 blur-3xl" />
 
           <div className="relative z-10">
             <h4 className="mb-4 text-base font-semibold text-text-primary">Create Event</h4>
 
             {error && (
-              <p className="mb-3 rounded-lg border border-red-300/40 bg-red-900 px-3 py-2 text-xs text-red-100">
+              <p className="mb-3 rounded-lg border border-[#45A29E]/40 bg-[#1F2833] px-3 py-2 text-xs text-[#C5C6C7]">
                 {error}
               </p>
             )}
@@ -315,10 +315,10 @@ export default function CalendarWidget() {
                 onClick={createEvent}
                 disabled={isCreatingEvent}
                 className="
-                  flex-1 rounded-lg border border-green-300/40 bg-green-600/30 px-3 py-2
-                  text-xs font-semibold text-green-100 hover:bg-green-500/40
+                  flex-1 rounded-lg border border-[#66FCF1]/40 bg-[#66FCF1]/20 px-3 py-2
+                  text-xs font-semibold text-[#66FCF1] hover:bg-[#66FCF1]/40
                   disabled:opacity-50 transition-colors
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400
+                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1]
                 "
               >
                 {isCreatingEvent ? '...' : 'Create'}
@@ -353,16 +353,16 @@ export default function CalendarWidget() {
       {/* Header with Navigation */}
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="font-display text-base font-semibold text-[#f6efe1]">
+          <h3 className="font-display text-base font-semibold text-[#C5C6C7]">
             {isToday ? "Today's schedule" : 'Schedule'}
           </h3>
-          <p className="text-xs text-[#a8bac9]">Focus on the next confirmed blocks.</p>
+          <p className="text-xs text-[#8E969F]">Focus on the next confirmed blocks.</p>
         </div>
         <button
           type="button"
           onClick={refreshSchedule}
           disabled={isLoading}
-          className="rounded p-1.5 text-[#a8bac9] hover:bg-white/[0.05] transition-colors"
+          className="rounded p-1.5 text-[#8E969F] hover:bg-white/[0.05] transition-colors"
           aria-label="Refresh schedule"
           title="Refresh schedule"
         >
@@ -383,7 +383,7 @@ export default function CalendarWidget() {
         >
           ← Prev
         </button>
-        <div className="text-xs text-[#a8bac9]">
+        <div className="text-xs text-[#8E969F]">
           {displayDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
         </div>
         <div className="flex gap-2">
@@ -415,13 +415,13 @@ export default function CalendarWidget() {
       </div>
 
       {error && (
-        <p className="mb-3 rounded-lg border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs text-red-100" role="alert">
+        <p className="mb-3 rounded-lg border border-[#45A29E]/20 bg-[#45A29E]/10 px-3 py-2 text-xs text-[#C5C6C7]" role="alert">
           {error}
         </p>
       )}
 
       {successMessage && (
-        <p className="mb-3 rounded-lg border border-green-300/20 bg-green-500/10 px-3 py-2 text-xs text-green-100" role="status">
+        <p className="mb-3 rounded-lg border border-[#66FCF1]/20 bg-[#66FCF1]/10 px-3 py-2 text-xs text-[#66FCF1]" role="status">
           ✓ {successMessage}
         </p>
       )}
@@ -448,7 +448,7 @@ export default function CalendarWidget() {
                 key={event.id}
                 className={`
                   min-h-11 flex items-center gap-2 rounded border px-3 py-2 text-sm
-                  transition-all bg-white/[0.03] border-white/15 text-[#dbe4ec]
+                  transition-all bg-white/[0.03] border-white/15 text-[#C5C6C7]
                   ${isCurrentEvent ? 'ring-2 ring-secondary/50 glow' : ''}
                 `}
                 role="listitem"
@@ -497,8 +497,8 @@ export default function CalendarWidget() {
             disabled={loadingSlots}
             className="
               touch-target flex-1 text-center text-xs font-semibold
-              rounded border border-[#36b5ce]/35 bg-[#36b5ce]/10 text-[#9fe1ef]
-              hover:bg-[#36b5ce]/18 disabled:opacity-50 transition-colors
+              rounded border border-[#66FCF1]/35 bg-[#66FCF1]/10 text-[#66FCF1]
+              hover:bg-[#66FCF1]/18 disabled:opacity-50 transition-colors
               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
             "
             aria-label="Find free slots"
@@ -510,9 +510,9 @@ export default function CalendarWidget() {
             onClick={() => setShowEventModal(true)}
             className="
               touch-target flex-1 text-center text-xs font-semibold
-              rounded border border-white/15 bg-white/[0.03] text-[#dbe4ec]
+              rounded border border-white/15 bg-white/[0.03] text-[#C5C6C7]
               hover:bg-white/[0.06] transition-colors
-              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400
+              focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1]
             "
             aria-label="Create new event"
           >
@@ -524,9 +524,9 @@ export default function CalendarWidget() {
           onClick={() => setShowEventModal(true)}
           className="
             touch-target w-full text-center text-xs font-semibold
-            rounded border border-white/15 bg-white/[0.03] text-[#dbe4ec]
+            rounded border border-white/15 bg-white/[0.03] text-[#C5C6C7]
             hover:bg-white/[0.06] transition-colors
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-400
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1]
           "
           aria-label="Add new event"
         >

@@ -112,13 +112,13 @@ export default function NoteToSelfModal({ isOpen, onClose }) {
 
         {/* Status Messages */}
         {error && (
-          <div className="rounded-lg border border-red-300/30 bg-red-500/10 p-3">
-            <p className="text-sm text-red-200">{error}</p>
+          <div className="rounded-lg border border-[#45A29E]/30 bg-[#45A29E]/10 p-3">
+            <p className="text-sm text-[#B8FFFA]">{error}</p>
           </div>
         )}
         {success && (
-          <div className="rounded-lg border border-green-300/30 bg-green-500/10 p-3">
-            <p className="text-sm text-green-200">{success}</p>
+          <div className="rounded-lg border border-[#66FCF1]/30 bg-[#66FCF1]/10 p-3">
+            <p className="text-sm text-[#66FCF1]">{success}</p>
           </div>
         )}
 
@@ -144,9 +144,9 @@ export default function NoteToSelfModal({ isOpen, onClose }) {
                       type="button"
                       onClick={() => handleDeleteNote(note.id)}
                       className="
-                        touch-target p-1 text-text-secondary hover:text-red-300
+                        touch-target p-1 text-text-secondary hover:text-[#B8FFFA]
                         transition-colors focus-visible:outline-none focus-visible:ring-1
-                        focus-visible:ring-red-400
+                        focus-visible:ring-[#66FCF1]
                       "
                       aria-label={`Delete note: ${note.content.substring(0, 20)}`}
                     >

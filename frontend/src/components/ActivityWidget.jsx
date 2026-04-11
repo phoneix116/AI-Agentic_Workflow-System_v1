@@ -74,14 +74,14 @@ export default function ActivityWidget() {
         label: 'Tasks Completed',
         value: completedTasks,
         max: Math.max(totalTasks, 1),
-        color: 'bg-green-500',
+        color: 'bg-[#45A29E]',
         icon: '✓',
       },
       {
         label: 'Emails Processed',
         value: processedEmails,
         max: Math.max(emails.length, 1),
-        color: 'bg-blue-500',
+        color: 'bg-[#66FCF1]',
         icon: '📧',
       },
     ]
@@ -100,12 +100,12 @@ export default function ActivityWidget() {
     <article className="glass flex h-full min-h-0 flex-col overflow-hidden rounded-2xl p-4">
       {/* Header */}
       <div className="mb-4">
-        <h3 className="font-display text-base font-semibold text-[#f6efe1]">Today&apos;s activity</h3>
-        <p className="text-xs text-[#a8bac9]">Performance snapshot across key channels.</p>
+        <h3 className="font-display text-base font-semibold text-[#C5C6C7]">Today&apos;s activity</h3>
+        <p className="text-xs text-[#8E969F]">Performance snapshot across key channels.</p>
       </div>
 
       {error && (
-        <p className="mb-3 rounded-lg border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs text-red-100" role="alert">
+        <p className="mb-3 rounded-lg border border-[#45A29E]/20 bg-[#45A29E]/10 px-3 py-2 text-xs text-[#C5C6C7]" role="alert">
           {error}
         </p>
       )}
@@ -134,7 +134,7 @@ export default function ActivityWidget() {
                     {metric.label}
                   </p>
                   <span
-                    className="text-sm font-semibold text-[#9fe1ef]"
+                    className="text-sm font-semibold text-[#66FCF1]"
                     aria-label={`${metric.value} out of ${metric.max}`}
                   >
                     {metric.value}/{metric.max}
@@ -160,11 +160,11 @@ export default function ActivityWidget() {
 
       {/* Summary Stats */}
       <div className="mt-6 pt-4 border-t border-white/10 space-y-2">
-        <p className="text-xs text-[#a8bac9]">
-          <span className="font-semibold text-[#f6efe1]">{completedTasks}</span> tasks completed today
+        <p className="text-xs text-[#8E969F]">
+          <span className="font-semibold text-[#C5C6C7]">{completedTasks}</span> tasks completed today
         </p>
-        <p className="text-xs text-[#a8bac9]">
-          <span className="font-semibold text-[#f6efe1]">{remainingTasks}</span> tasks remaining, {unreadEmails} unread emails
+        <p className="text-xs text-[#8E969F]">
+          <span className="font-semibold text-[#C5C6C7]">{remainingTasks}</span> tasks remaining, {unreadEmails} unread emails
         </p>
       </div>
 
@@ -173,7 +173,7 @@ export default function ActivityWidget() {
         type="button"
         onClick={openProductivityPage}
         className="
-          touch-target mt-4 w-full text-center text-sm text-[#9fe1ef] hover:text-[#b8edf8]
+          touch-target mt-4 w-full text-center text-sm text-[#66FCF1] hover:text-[#66FCF1]
           py-2 rounded transition-colors focus-visible:outline-none
           focus-visible:ring-2 focus-visible:ring-secondary
         "

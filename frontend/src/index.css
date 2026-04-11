@@ -22,8 +22,8 @@ body,
 
 body {
   overflow-x: hidden;
-  background-color: #060b17;
-  color: #E2E8F0;
+  background-color: #0B0C10;
+  color: #C5C6C7;
   font-family: 'IBM Plex Sans', 'Sora', ui-sans-serif, sans-serif;
   line-height: 1.5;
   letter-spacing: 0.005em;
@@ -41,10 +41,10 @@ body::before {
   pointer-events: none;
   z-index: 0;
   background:
-    radial-gradient(circle at 15% 5%, rgba(246, 102, 53, 0.24), transparent 34%),
-    radial-gradient(circle at 90% 85%, rgba(54, 181, 206, 0.16), transparent 44%),
+    radial-gradient(circle at 15% 5%, rgba(69, 162, 158, 0.26), transparent 34%),
+    radial-gradient(circle at 90% 85%, rgba(102, 252, 241, 0.2), transparent 44%),
     radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.06), transparent 30%),
-    linear-gradient(160deg, rgba(11, 18, 32, 0.78), rgba(7, 11, 22, 0.94));
+    linear-gradient(160deg, rgba(11, 12, 16, 0.86), rgba(31, 40, 51, 0.92));
 }
 
 /* Glassmorphism effect */
@@ -64,11 +64,11 @@ body::before {
 
 /* Gradient backgrounds */
 .gradient-primary {
-  background: linear-gradient(135deg, #f66635, #36b5ce);
+  background: linear-gradient(135deg, #45A29E, #66FCF1);
 }
 
 .gradient-glow {
-  background: radial-gradient(circle, rgba(59, 130, 246, 0.3), transparent);
+  background: radial-gradient(circle, rgba(102, 252, 241, 0.26), transparent);
 }
 
 .font-display {
@@ -216,7 +216,7 @@ body::before {
 /* Focus Visible States */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #60A5FA, 0 0 0 4px #0B1220;
+  box-shadow: 0 0 0 2px #66FCF1, 0 0 0 4px #0B0C10;
 }
 
 /* Meet common mobile accessibility guidance for tap target size. */
@@ -300,15 +300,15 @@ button:active:not(:disabled) {
 }
 
 .chat-bubble.user {
-  background: linear-gradient(135deg, #1D4ED8, #0EA5E9);
-  color: #FFFFFF;
+  background: linear-gradient(135deg, #45A29E, #66FCF1);
+  color: #0B0C10;
   margin-left: auto;
 }
 
 .chat-bubble.ai {
-  background: rgba(15, 23, 42, 0.62);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  color: #E2E8F0;
+  background: rgba(31, 40, 51, 0.62);
+  border: 1px solid rgba(197, 198, 199, 0.22);
+  color: #C5C6C7;
 }
 
 /* Typing Indicator Dots */
@@ -331,7 +331,7 @@ button:active:not(:disabled) {
 /* Progress Bars */
 .progress-bar {
   @apply h-2 rounded-full overflow-hidden;
-  background: rgba(148, 163, 184, 0.16);
+  background: rgba(197, 198, 199, 0.16);
 }
 
 .progress-bar-fill {
@@ -341,7 +341,7 @@ button:active:not(:disabled) {
 /* Input Field Focus Ring */
 input:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #60A5FA, 0 0 0 4px #0B1220;
+  box-shadow: 0 0 0 2px #66FCF1, 0 0 0 4px #0B0C10;
 }
 
 /* Button States */
@@ -352,17 +352,17 @@ button:disabled {
 
 /* Cards and Widgets */
 .widget {
-  background: rgba(15, 23, 42, 0.64);
+  background: rgba(31, 40, 51, 0.64);
   border-radius: 0.5rem;
   padding: 1.5rem;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border: 1px solid rgba(197, 198, 199, 0.18);
   animation: fadeIn 0.4s ease-in-out;
 }
 
 /* Smooth focus visible for accessibility */
 :focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px #60A5FA, 0 0 0 4px #0B1220;
+  box-shadow: 0 0 0 2px #66FCF1, 0 0 0 4px #0B0C10;
   border-radius: 0.5rem;
 }
 
@@ -370,7 +370,7 @@ button:disabled {
 button:focus,
 a:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #60A5FA, 0 0 0 4px #0B1220;
+  box-shadow: 0 0 0 2px #66FCF1, 0 0 0 4px #0B0C10;
 }
 
 /* Utility: scrollbar styling for dark mode */
@@ -379,26 +379,26 @@ a:focus {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(51, 65, 85, 0.38);
+  background: rgba(31, 40, 51, 0.46);
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 116, 139, 0.72);
+  background-color: rgba(69, 162, 158, 0.72);
   border-radius: 0.5rem;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #94A3B8;
+  background-color: #66FCF1;
 }
 
 /* Placeholder text color */
 ::placeholder {
-  color: #64748B;
+  color: #8E969F;
 }
 
 /* Selection color */
 ::selection {
-  background-color: #1D4ED8;
-  color: #F8FAFC;
+  background-color: #45A29E;
+  color: #0B0C10;
 }
 

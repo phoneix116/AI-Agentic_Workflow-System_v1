@@ -197,8 +197,8 @@ export default function CalendarModal({ isOpen, onClose }) {
 
         {/* Error Message */}
         {error && (
-          <div className="rounded-lg border border-red-300/30 bg-red-500/10 p-3">
-            <p className="text-sm text-red-200">{error}</p>
+          <div className="rounded-lg border border-[#45A29E]/30 bg-[#45A29E]/10 p-3">
+            <p className="text-sm text-[#B8FFFA]">{error}</p>
           </div>
         )}
 
@@ -226,9 +226,9 @@ export default function CalendarModal({ isOpen, onClose }) {
                       type="button"
                       onClick={() => handleDeleteEvent(event.id)}
                       className="
-                        touch-target p-1 text-text-secondary hover:text-red-300
+                        touch-target p-1 text-text-secondary hover:text-[#B8FFFA]
                         transition-colors focus-visible:outline-none focus-visible:ring-1
-                        focus-visible:ring-red-400
+                        focus-visible:ring-[#66FCF1]
                       "
                       aria-label={`Delete event: ${event.title}`}
                     >
@@ -261,9 +261,9 @@ export default function CalendarModal({ isOpen, onClose }) {
                       type="button"
                       onClick={() => handleDeleteEvent(event.id)}
                       className="
-                        touch-target p-1 text-text-secondary hover:text-red-300
+                        touch-target p-1 text-text-secondary hover:text-[#B8FFFA]
                         transition-colors focus-visible:outline-none focus-visible:ring-1
-                        focus-visible:ring-red-400
+                        focus-visible:ring-[#66FCF1]
                       "
                       aria-label={`Delete event: ${event.title}`}
                     >

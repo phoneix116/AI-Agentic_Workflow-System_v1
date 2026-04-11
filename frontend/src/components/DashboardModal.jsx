@@ -69,8 +69,8 @@ export default function DashboardModal({ isOpen, onClose }) {
   ]
 
   const colorClasses = {
-    blue: 'border-blue-300/30 bg-blue-500/10 text-blue-200',
-    green: 'border-green-300/30 bg-green-500/10 text-green-200',
+    blue: 'border-[#66FCF1]/30 bg-[#66FCF1]/10 text-[#66FCF1]',
+    green: 'border-[#66FCF1]/30 bg-[#66FCF1]/10 text-[#66FCF1]',
     purple: 'border-purple-300/30 bg-purple-500/10 text-purple-200',
     amber: 'border-amber-300/30 bg-amber-500/10 text-amber-200',
   }
@@ -82,7 +82,7 @@ export default function DashboardModal({ isOpen, onClose }) {
         <div>
           <h3 className="text-sm font-semibold text-text-secondary mb-4">SYSTEM STATUS</h3>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="w-3 h-3 rounded-full bg-[#45A29E] animate-pulse" />
             <p className="text-sm text-text-primary font-medium">All systems operational</p>
           </div>
         </div>
@@ -95,8 +95,8 @@ export default function DashboardModal({ isOpen, onClose }) {
               <p className="text-text-secondary">Loading stats...</p>
             </div>
           ) : error ? (
-            <div className="rounded-lg border border-red-300/30 bg-red-500/10 p-4">
-              <p className="text-sm text-red-200">{error}</p>
+            <div className="rounded-lg border border-[#45A29E]/30 bg-[#45A29E]/10 p-4">
+              <p className="text-sm text-[#B8FFFA]">{error}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3">

@@ -207,10 +207,10 @@ export default function ChatPanel() {
   }
 
   const statusChipClasses = {
-    [REQUEST_STATE.IDLE]: 'border-white/12 bg-white/[0.03] text-[#95a6b6]',
-    [REQUEST_STATE.LOADING]: 'border-[#36b5ce]/28 bg-[#36b5ce]/10 text-[#9ddceb]',
-    [REQUEST_STATE.SUCCESS]: 'border-[#67d39a]/28 bg-[#67d39a]/10 text-[#b9ebd0]',
-    [REQUEST_STATE.ERROR]: 'border-[#f66635]/30 bg-[#f66635]/12 text-[#ffcdb9]',
+    [REQUEST_STATE.IDLE]: 'border-white/12 bg-white/[0.03] text-[#8E969F]',
+    [REQUEST_STATE.LOADING]: 'border-[#66FCF1]/28 bg-[#66FCF1]/10 text-[#66FCF1]',
+    [REQUEST_STATE.SUCCESS]: 'border-[#45A29E]/28 bg-[#45A29E]/10 text-[#9FD6D2]',
+    [REQUEST_STATE.ERROR]: 'border-[#45A29E]/30 bg-[#45A29E]/12 text-[#B8FFFA]',
   }
 
   const statusText = {
@@ -231,8 +231,8 @@ export default function ChatPanel() {
 
       <header className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div className="space-y-1">
-          <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-[#eaf0f6] md:text-xl">Assistant chat</h2>
-          <p className="text-sm text-[#9fb0bf]">Ask a question and get focused, actionable help.</p>
+          <h2 className="font-display text-lg font-semibold tracking-[-0.01em] text-[#C5C6C7] md:text-xl">Assistant chat</h2>
+          <p className="text-sm text-[#8E969F]">Ask a question and get focused, actionable help.</p>
         </div>
         <div className="flex items-center gap-2">
           <span
@@ -245,7 +245,7 @@ export default function ChatPanel() {
           <button
             type="button"
             onClick={clearConversation}
-            className="touch-target rounded-xl border border-white/15 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-[#9fb0bf] hover:border-white/30 hover:bg-white/[0.06] hover:text-[#e5edf4]"
+            className="touch-target rounded-xl border border-white/15 bg-white/[0.02] px-3 py-2 text-xs font-semibold text-[#8E969F] hover:border-white/30 hover:bg-white/[0.06] hover:text-[#C5C6C7]"
             aria-label="Clear conversation"
           >
             Clear
@@ -254,7 +254,7 @@ export default function ChatPanel() {
       </header>
 
       {errorNotice && (
-        <div className="relative z-10 rounded-xl border border-[#f66635]/30 bg-[#f66635]/10 px-3 py-2 text-xs text-[#ffd9cc]" role="alert">
+        <div className="relative z-10 rounded-xl border border-[#45A29E]/30 bg-[#45A29E]/10 px-3 py-2 text-xs text-[#B8FFFA]" role="alert">
           <p className="font-semibold">Connection issue</p>
           <p className="mt-1 leading-relaxed">{errorNotice}</p>
         </div>
@@ -270,8 +270,8 @@ export default function ChatPanel() {
       >
         {messages.length === 0 ? (
           <div className="relative z-10 flex h-full min-h-[12rem] flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-white/15 bg-white/[0.02] px-5 text-center animate-fade-in">
-            <h3 className="font-display text-lg font-semibold text-[#eaf0f6]">Start a conversation</h3>
-            <p className="max-w-sm text-sm text-[#9fb0bf]">
+            <h3 className="font-display text-lg font-semibold text-[#C5C6C7]">Start a conversation</h3>
+            <p className="max-w-sm text-sm text-[#8E969F]">
               Try one of these quick prompts or write your own message below.
             </p>
             <div className="flex flex-wrap justify-center gap-2">
@@ -280,7 +280,7 @@ export default function ChatPanel() {
                   key={`empty-${prompt}`}
                   type="button"
                   onClick={() => handleQuickSendPrompt(prompt)}
-                  className="touch-target rounded-full border border-white/20 bg-transparent px-3 py-2 text-xs text-[#b9c7d4] hover:border-white/35 hover:text-[#e5edf4]"
+                  className="touch-target rounded-full border border-white/20 bg-transparent px-3 py-2 text-xs text-[#C5C6C7] hover:border-white/35 hover:text-[#C5C6C7]"
                 >
                   {prompt}
                 </button>
@@ -298,14 +298,14 @@ export default function ChatPanel() {
 
       {input === '' && messages.length > 0 && (
         <div className="relative z-10 mb-1 flex flex-col gap-2 animate-fade-in">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8194a6]">Suggested</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-[#8E969F]">Suggested</p>
           <div className="flex flex-wrap gap-2">
             {compactPrompts.map((prompt) => (
               <button
                 key={prompt}
                 type="button"
                 onClick={() => handleSuggestedPrompt(prompt)}
-                className="touch-target rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-[#b8c7d4] transition-all duration-200 hover:border-white/30 hover:text-[#e5edf4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#36b5ce]"
+                className="touch-target rounded-full border border-white/15 bg-transparent px-3 py-1.5 text-xs font-medium text-[#C5C6C7] transition-all duration-200 hover:border-white/30 hover:text-[#C5C6C7] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1]"
               >
                 {prompt}
               </button>
@@ -315,7 +315,7 @@ export default function ChatPanel() {
       )}
 
       <div className="relative z-10 mt-auto flex flex-col gap-2 border-t border-white/10 pt-3">
-        <div className="flex items-center justify-between text-[11px] text-[#7f96ab]">
+        <div className="flex items-center justify-between text-[11px] text-[#8E969F]">
           <p>Enter to send</p>
           <p aria-live="polite">{input.length}/{maxInputChars}</p>
         </div>
@@ -328,14 +328,14 @@ export default function ChatPanel() {
             onKeyDown={handleComposerKeyDown}
             placeholder="Ask anything..."
             rows={1}
-            className="max-h-40 min-h-[50px] flex-1 resize-none rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-[#e6edf5] placeholder-[#7f96ab] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#36b5ce] focus:ring-offset-2 focus:ring-offset-transparent"
+            className="max-h-40 min-h-[50px] flex-1 resize-none rounded-xl border border-white/15 bg-white/[0.03] px-4 py-3 text-sm text-[#C5C6C7] placeholder-[#8E969F] transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[#66FCF1] focus:ring-offset-2 focus:ring-offset-transparent"
             aria-label="Chat input"
           />
           <button
             type="button"
             onClick={() => handleSendMessage()}
             disabled={!input.trim() || isLoading}
-            className="touch-target rounded-xl border border-white/15 bg-[linear-gradient(135deg,#f66635,#36b5ce)] px-4 py-3 font-semibold text-[#fdf4ea] shadow-[0_10px_28px_rgba(12,22,35,0.3)] transition-all duration-200 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#36b5ce] sm:min-w-[96px]"
+            className="touch-target rounded-xl border border-white/15 bg-[linear-gradient(135deg,#45A29E,#66FCF1)] px-4 py-3 font-semibold text-[#C5C6C7] shadow-[0_10px_28px_rgba(12,22,35,0.3)] transition-all duration-200 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 disabled:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1] sm:min-w-[96px]"
             aria-label={isLoading ? 'Sending message' : 'Send message'}
             aria-keyshortcuts="Enter"
           >

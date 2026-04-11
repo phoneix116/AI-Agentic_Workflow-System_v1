@@ -204,17 +204,17 @@ export default function WebGLHeroCanvas() {
   }, [])
 
   return (
-    <div className="relative h-[360px] w-full overflow-hidden rounded-[28px] border border-white/15 bg-[#121b2c] shadow-[0_30px_90px_rgba(1,4,12,0.58)] md:h-[460px]">
+    <div className="relative h-[360px] w-full overflow-hidden rounded-[28px] border border-white/15 bg-[#1F2833] shadow-[0_30px_90px_rgba(1,4,12,0.58)] md:h-[460px]">
       {isSupported ? (
         <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" aria-label="Interactive visual backdrop" />
       ) : (
         <div
-          className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(247,118,66,0.4),transparent_38%),radial-gradient(circle_at_75%_65%,rgba(60,190,214,0.34),transparent_42%),linear-gradient(140deg,#1a1f31,#0f1726)]"
+          className="absolute inset-0 bg-[radial-gradient(circle_at_20%_30%,rgba(69,162,158,0.4),transparent_38%),radial-gradient(circle_at_75%_65%,rgba(102,252,241,0.34),transparent_42%),linear-gradient(140deg,#1F2833,#0B0C10)]"
           aria-hidden="true"
         />
       )}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(2,6,23,0.18),rgba(2,6,23,0.46))]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#0a101b] to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#0B0C10] to-transparent" />
     </div>
   )
 }

@@ -142,13 +142,13 @@ export default function TasksWidget() {
   const getPriorityColor = (priority) => {
     switch (priority) {
       case 'high':
-        return 'bg-red-500/20 text-red-300'
+        return 'bg-[#66FCF1]/15 text-[#66FCF1]'
       case 'medium':
-        return 'bg-yellow-500/20 text-yellow-300'
+        return 'bg-[#45A29E]/18 text-[#B8FFFA]'
       case 'low':
-        return 'bg-green-500/20 text-green-300'
+        return 'bg-[#45A29E]/24 text-[#C5C6C7]'
       default:
-        return 'bg-gray-500/20 text-gray-300'
+        return 'bg-[#1F2833]/70 text-[#8E969F]'
     }
   }
 
@@ -165,10 +165,10 @@ export default function TasksWidget() {
       {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-display text-base font-semibold text-[#f6efe1]">Tasks</h3>
-          <p className="text-xs text-[#a8bac9]">{pendingCount} open actions for today</p>
+          <h3 className="font-display text-base font-semibold text-[#C5C6C7]">Tasks</h3>
+          <p className="text-xs text-[#8E969F]">{pendingCount} open actions for today</p>
         </div>
-        <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-xs font-semibold text-[#9eb2c3]">
+        <span className="rounded-full border border-white/15 bg-white/[0.03] px-2.5 py-1 text-xs font-semibold text-[#8E969F]">
           {completedCount}/{tasks.length}
         </span>
       </div>
@@ -187,11 +187,11 @@ export default function TasksWidget() {
       </div>
 
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-xs text-[#9eb2c3]">Completion: {completionPercent}%</p>
+        <p className="text-xs text-[#8E969F]">Completion: {completionPercent}%</p>
         <button
           type="button"
           onClick={() => setShowCompleted(prev => !prev)}
-          className="touch-target rounded-md border border-white/15 bg-white/[0.03] px-2.5 py-1.5 text-xs text-[#c7d3dd] hover:border-white/30 hover:bg-white/[0.06]"
+          className="touch-target rounded-md border border-white/15 bg-white/[0.03] px-2.5 py-1.5 text-xs text-[#C5C6C7] hover:border-white/30 hover:bg-white/[0.06]"
           aria-pressed={showCompleted}
           aria-label={showCompleted ? 'Hide completed tasks' : 'Show completed tasks'}
         >
@@ -200,13 +200,13 @@ export default function TasksWidget() {
       </div>
 
       {error && (
-        <p className="mb-3 rounded-lg border border-red-300/20 bg-red-500/10 px-3 py-2 text-xs text-red-100" role="alert">
+        <p className="mb-3 rounded-lg border border-[#45A29E]/30 bg-[#45A29E]/10 px-3 py-2 text-xs text-[#B8FFFA]" role="alert">
           {error}
         </p>
       )}
 
       {successMessage && (
-        <p className="mb-3 rounded-lg border border-green-300/20 bg-green-500/10 px-3 py-2 text-xs text-green-100" role="status">
+        <p className="mb-3 rounded-lg border border-[#66FCF1]/30 bg-[#66FCF1]/10 px-3 py-2 text-xs text-[#66FCF1]" role="status">
           ✓ {successMessage}
         </p>
       )}
@@ -243,7 +243,7 @@ export default function TasksWidget() {
                 htmlFor={`task-${task.id}`}
                 className={`
                   flex-1 cursor-pointer text-sm transition-all
-                  ${task.completed ? 'text-[#7f93a4] line-through' : 'text-[#e1eaf2]'}
+                  ${task.completed ? 'text-[#8E969F] line-through' : 'text-[#C5C6C7]'}
                 `}
               >
                 {task.title}
@@ -257,9 +257,9 @@ export default function TasksWidget() {
                 disabled={updatingId === task.id}
                 className="
                   opacity-0 group-hover:opacity-100 rounded px-2 py-1 text-xs
-                  border border-red-300/30 text-red-200 bg-red-500/10 hover:bg-red-500/20
+                  border border-[#45A29E]/35 text-[#B8FFFA] bg-[#45A29E]/10 hover:bg-[#45A29E]/20
                   disabled:opacity-50 transition-all focus-visible:opacity-100
-                  focus-visible:ring-2 focus-visible:ring-red-400
+                  focus-visible:ring-2 focus-visible:ring-[#66FCF1]
                 "
                 aria-label={`Delete task: ${task.title}`}
               >
@@ -274,7 +274,7 @@ export default function TasksWidget() {
       <button
         type="button"
         className="
-          touch-target mt-4 w-full text-center text-sm text-[#9fe1ef] hover:text-[#b8edf8]
+          touch-target mt-4 w-full text-center text-sm text-[#66FCF1] hover:text-[#66FCF1]
           py-2 rounded transition-colors focus-visible:outline-none
           focus-visible:ring-2 focus-visible:ring-secondary
         "

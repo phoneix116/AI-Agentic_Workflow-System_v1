@@ -111,14 +111,14 @@ export default function UserProfileModal({ isOpen, onClose }) {
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="User Profile & AI Preferences">
+    <Modal isOpen={isOpen} onClose={onClose} title="User Profile & Astra Preferences">
       <div className="space-y-5">
         {loading ? (
           <p className="text-sm text-text-secondary">Loading your profile...</p>
         ) : (
           <>
             <p className="text-sm text-text-secondary">
-              Update your role, organization, and AI guidance so generated tasks/events match your work context.
+              Update your role, organization, and Astra guidance so generated tasks/events match your work context.
             </p>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -154,7 +154,7 @@ export default function UserProfileModal({ isOpen, onClose }) {
             />
 
             <TextArea
-              label="AI Instructions"
+              label="Astra Instructions"
               value={formData.ai_instructions}
               onChange={(value) => handleInputChange('ai_instructions', value)}
               placeholder="Tell the assistant how to structure task/event suggestions for your workflow."
@@ -225,8 +225,8 @@ function TextArea({ label, value, onChange, placeholder }) {
 function Banner({ tone, text }) {
   const styles =
     tone === 'error'
-      ? 'border-red-300/30 bg-red-500/10 text-red-200'
-      : 'border-green-300/30 bg-green-500/10 text-green-200'
+      ? 'border-[#45A29E]/30 bg-[#45A29E]/10 text-[#B8FFFA]'
+      : 'border-[#66FCF1]/30 bg-[#66FCF1]/10 text-[#66FCF1]'
 
   return (
     <div className={`rounded-lg border px-3 py-2 text-sm ${styles}`}>

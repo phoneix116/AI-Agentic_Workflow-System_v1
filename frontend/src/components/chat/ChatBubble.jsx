@@ -60,34 +60,34 @@ export default function ChatBubble({ message }) {
     <div
       className={`flex gap-2.5 animate-fade-in ${isAI ? 'justify-start' : 'justify-end'}`}
       role="article"
-      aria-label={`${isAI ? 'AI' : 'User'} message`}
+      aria-label={`${isAI ? 'Astra' : 'User'} message`}
     >
       {isAI && (
-        <div className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/[0.03]">
-          <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-[#a7b8c7]">AI</span>
+        <div className="mt-0.5 flex h-7 min-w-11 flex-shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/[0.03] px-2">
+          <span className="text-[8px] font-semibold uppercase tracking-[0.08em] text-[#8E969F]">Astra</span>
         </div>
       )}
       <div className={`flex flex-1 flex-col gap-2 ${isAI ? 'items-start' : 'items-end'}`}>
         <div
           className={`
             max-w-[92%] rounded-xl px-3.5 py-3 shadow-[0_6px_18px_rgba(2,6,23,0.18)] md:max-w-[84%]
-            ${isAI ? 'border border-white/15 bg-white/[0.03] text-[#dbe6f0]' : 'border border-[#f6a98f]/35 bg-[linear-gradient(135deg,rgba(246,102,53,0.3),rgba(54,181,206,0.28))] text-[#fdf4ea]'}
+            ${isAI ? 'border border-white/15 bg-white/[0.03] text-[#C5C6C7]' : 'border border-[#66FCF1]/35 bg-[linear-gradient(135deg,rgba(69,162,158,0.3),rgba(102,252,241,0.28))] text-[#0B0C10]'}
           `}
         >
-          <div className={`mb-2 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] ${isAI ? 'text-[#8ea3b5]' : 'text-[#a6b6c5]'}`}>
+          <div className={`mb-2 flex items-center justify-between gap-2 text-[10px] uppercase tracking-[0.12em] ${isAI ? 'text-[#8E969F]' : 'text-[#8E969F]'}`}>
             <span>{isAI ? 'Assistant' : 'You'}</span>
             <span>{timestampLabel}</span>
           </div>
           <p className="break-words whitespace-pre-wrap text-sm">{message.text}</p>
 
           {toolResults.length > 0 && (
-            <p className={`mt-3 text-xs font-medium ${isAI ? 'text-[#86bfd1]' : 'text-[#bfd0dc]'}`}>
+            <p className={`mt-3 text-xs font-medium ${isAI ? 'text-[#66FCF1]' : 'text-[#C5C6C7]'}`}>
               {toolResults.length} tool result{toolResults.length === 1 ? '' : 's'}
             </p>
           )}
 
           {hasActionCards && (
-            <p className={`mt-1 text-xs font-medium ${isAI ? 'text-[#86bfd1]' : 'text-[#bfd0dc]'}`}>
+            <p className={`mt-1 text-xs font-medium ${isAI ? 'text-[#66FCF1]' : 'text-[#C5C6C7]'}`}>
               Action required: {message.actionCards.length} option{message.actionCards.length === 1 ? '' : 's'}
             </p>
           )}
@@ -100,8 +100,8 @@ export default function ChatBubble({ message }) {
                 key={index}
                 className={`rounded-xl border px-3 py-3 text-xs ${
                   result.success
-                    ? 'border-[#6bd7a5]/30 bg-[#6bd7a5]/12 text-[#cef9e5]'
-                    : 'border-[#f66635]/30 bg-[#f66635]/12 text-[#ffd9cc]'
+                    ? 'border-[#45A29E]/30 bg-[#45A29E]/12 text-[#9FD6D2]'
+                    : 'border-[#45A29E]/30 bg-[#45A29E]/12 text-[#B8FFFA]'
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -135,8 +135,8 @@ export default function ChatBubble({ message }) {
                 disabled={isExecuting === card.id}
                 className={`w-full rounded-lg border px-3 py-2 text-left font-semibold transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 ${
                   card.action === 'reject'
-                    ? 'border-[#f66635]/45 bg-[#f66635]/12 text-[#ffd8cb] hover:bg-[#f66635]/20 focus-visible:ring-[#f66635]'
-                    : 'border-[#36b5ce]/45 bg-[#36b5ce]/12 text-[#a4ecfb] hover:bg-[#36b5ce]/20 focus-visible:ring-[#36b5ce]'
+                    ? 'border-[#45A29E]/45 bg-[#45A29E]/12 text-[#B8FFFA] hover:bg-[#45A29E]/20 focus-visible:ring-[#45A29E]'
+                    : 'border-[#66FCF1]/45 bg-[#66FCF1]/12 text-[#66FCF1] hover:bg-[#66FCF1]/20 focus-visible:ring-[#66FCF1]'
                 }`}
               >
                 {isExecuting === card.id ? 'Processing...' : card.label}
@@ -146,7 +146,7 @@ export default function ChatBubble({ message }) {
         )}
 
         {actionResult && (
-          <div className={`w-full max-w-[92%] rounded-lg border px-3 py-2 text-xs md:max-w-[84%] ${actionResult.startsWith('Action failed') ? 'border-[#f66635]/35 bg-[#f66635]/12 text-[#ffd6ca]' : 'border-[#6bd7a5]/30 bg-[#6bd7a5]/12 text-[#d8fbe9]'}`}>
+          <div className={`w-full max-w-[92%] rounded-lg border px-3 py-2 text-xs md:max-w-[84%] ${actionResult.startsWith('Action failed') ? 'border-[#45A29E]/35 bg-[#45A29E]/12 text-[#B8FFFA]' : 'border-[#45A29E]/30 bg-[#45A29E]/12 text-[#9FD6D2]'}`}>
             {actionResult}
           </div>
         )}

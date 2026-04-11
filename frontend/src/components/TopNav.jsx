@@ -67,7 +67,7 @@ export default function TopNav({ onLogout, onNavigate }) {
   }
 
   return (
-    <nav className="sticky top-0 z-20 border-b border-white/10 bg-[#0b1324]/78 backdrop-blur-xl">
+    <nav className="sticky top-0 z-20 border-b border-white/10 bg-[#1F2833]/78 backdrop-blur-xl">
       <div className="max-w-full px-4 py-3 md:px-6">
         <div className="flex items-center justify-between gap-4">
           {/* Logo */}
@@ -76,8 +76,8 @@ export default function TopNav({ onLogout, onNavigate }) {
               <span className="text-white font-bold text-base glow">🧠</span>
             </div>
             <div className="hidden sm:block">
-              <h1 className="text-sm font-bold text-[#f6efe1]">{ASSISTANT_NAME}</h1>
-              <p className="text-xs text-[#9eb2c3]">AI Assistant</p>
+              <h1 className="text-sm font-bold text-[#C5C6C7]">{ASSISTANT_NAME}</h1>
+              <p className="text-xs text-[#8E969F]">Astra Assistant</p>
             </div>
           </div>
 
@@ -89,7 +89,7 @@ export default function TopNav({ onLogout, onNavigate }) {
                 onClick={() => handleNavigation(item)}
                 className="
                   touch-target flex-shrink-0 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium
-                  text-[#b5c5d3] hover:border-white/20 hover:bg-white/[0.06] hover:text-[#f6efe1]
+                  text-[#C5C6C7] hover:border-white/20 hover:bg-white/[0.06] hover:text-[#C5C6C7]
                   transition-all duration-200 whitespace-nowrap
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary
                 "
@@ -115,8 +115,8 @@ export default function TopNav({ onLogout, onNavigate }) {
             >
               <div className="h-6 w-6 flex-shrink-0 rounded-full bg-gradient-primary glow" />
               <div className="text-left">
-                <p className="text-xs font-medium text-[#f6efe1]">{profile.name}</p>
-                <p className="text-xs text-[#9eb2c3]">
+                <p className="text-xs font-medium text-[#C5C6C7]">{profile.name}</p>
+                <p className="text-xs text-[#8E969F]">
                   {profile.role || profile.organization || 'Set profile'}
                 </p>
               </div>
@@ -127,10 +127,10 @@ export default function TopNav({ onLogout, onNavigate }) {
               onClick={handleLogout}
               className="
                 touch-target px-3 py-2 rounded-lg text-xs font-semibold
-                border border-white/15 bg-white/[0.03] text-[#f2c6b7]
-                hover:border-[#f66635]/45 hover:bg-[#f66635]/12 hover:text-[#ffd9cc]
+                border border-white/15 bg-white/[0.03] text-[#B8FFFA]
+                hover:border-[#45A29E]/45 hover:bg-[#45A29E]/12 hover:text-[#B8FFFA]
                 transition-all duration-200
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400
+                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1]
               "
               aria-label="Sign out"
             >

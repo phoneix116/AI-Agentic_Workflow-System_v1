@@ -116,9 +116,9 @@ export default function TasksModal({ isOpen, onClose }) {
   const completedTasks = tasks.filter(t => t.status === 'completed')
 
   const priorityColors = {
-    high: 'border-red-300/30 bg-red-500/10 text-red-200',
+    high: 'border-[#45A29E]/30 bg-[#45A29E]/10 text-[#B8FFFA]',
     medium: 'border-amber-300/30 bg-amber-500/10 text-amber-200',
-    low: 'border-green-300/30 bg-green-500/10 text-green-200',
+    low: 'border-[#66FCF1]/30 bg-[#66FCF1]/10 text-[#66FCF1]',
   }
 
   return (
@@ -177,8 +177,8 @@ export default function TasksModal({ isOpen, onClose }) {
 
         {/* Error Message */}
         {error && (
-          <div className="rounded-lg border border-red-300/30 bg-red-500/10 p-3">
-            <p className="text-sm text-red-200">{error}</p>
+          <div className="rounded-lg border border-[#45A29E]/30 bg-[#45A29E]/10 p-3">
+            <p className="text-sm text-[#B8FFFA]">{error}</p>
           </div>
         )}
 
@@ -212,9 +212,9 @@ export default function TasksModal({ isOpen, onClose }) {
                     type="button"
                     onClick={() => handleDeleteTask(task)}
                     className="
-                      touch-target p-1 text-text-secondary hover:text-red-300
+                      touch-target p-1 text-text-secondary hover:text-[#B8FFFA]
                       transition-colors focus-visible:outline-none focus-visible:ring-1
-                      focus-visible:ring-red-400
+                      focus-visible:ring-[#66FCF1]
                     "
                     aria-label={`Delete task: ${task.title}`}
                   >
@@ -234,7 +234,7 @@ export default function TasksModal({ isOpen, onClose }) {
             </h3>
             <ul className="space-y-2 max-h-40 overflow-y-auto">
               {completedTasks.map((task) => (
-                <li key={task.id} className="flex items-center gap-3 rounded-lg border border-green-300/30 bg-green-500/10 p-3">
+                <li key={task.id} className="flex items-center gap-3 rounded-lg border border-[#66FCF1]/30 bg-[#66FCF1]/10 p-3">
                   <input
                     type="checkbox"
                     checked={true}
@@ -243,15 +243,15 @@ export default function TasksModal({ isOpen, onClose }) {
                     aria-label={`Mark incomplete: ${task.title}`}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-green-200 line-through truncate">{task.title}</p>
+                    <p className="text-sm text-[#66FCF1] line-through truncate">{task.title}</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleDeleteTask(task)}
                     className="
-                      touch-target p-1 text-green-300 hover:text-red-300
+                      touch-target p-1 text-[#66FCF1] hover:text-[#B8FFFA]
                       transition-colors focus-visible:outline-none focus-visible:ring-1
-                      focus-visible:ring-red-400
+                      focus-visible:ring-[#66FCF1]
                     "
                     aria-label={`Delete task: ${task.title}`}
                   >

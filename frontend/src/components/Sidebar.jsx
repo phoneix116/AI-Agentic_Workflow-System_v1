@@ -85,7 +85,7 @@ export default function Sidebar({ mobileOpen = false, onToggleMobile, onCloseMob
         </div>
         <div className="flex-1">
           <h1 className="text-lg font-bold text-text-primary">{ASSISTANT_NAME}</h1>
-          <p className="text-xs text-text-secondary">AI Assistant</p>
+          <p className="text-xs text-text-secondary">Astra Assistant</p>
         </div>
 
         <button
@@ -159,10 +159,10 @@ export default function Sidebar({ mobileOpen = false, onToggleMobile, onCloseMob
           onClick={handleLogout}
           className="
             touch-target w-full text-center py-2.5 px-4 rounded-lg text-sm font-semibold
-            border border-red-300/30 bg-red-500/10 text-red-200
-            hover:bg-red-500/20 hover:text-red-100
+            border border-[#45A29E]/30 bg-[#45A29E]/10 text-[#B8FFFA]
+            hover:bg-[#45A29E]/20 hover:text-[#C5C6C7]
             transition-all duration-200
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#66FCF1]
           "
           aria-label="Sign out"
         >

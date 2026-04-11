@@ -40,13 +40,13 @@ export default function ConfirmationModal({ isOpen, onConfirm, onCancel, title, 
         <div className={`
           rounded-xl border shadow-2xl
           ${isDangerous 
-            ? 'border-red-300/30 bg-red-500/10' 
+            ? 'border-[#45A29E]/30 bg-[#45A29E]/10' 
             : 'border-white/10 bg-background-DEFAULT'
           }
         `}>
           {/* Header */}
           <div className="border-b border-white/10 px-6 py-4">
-            <h2 className={`text-lg font-bold ${isDangerous ? 'text-red-200' : 'text-text-primary'}`}>
+            <h2 className={`text-lg font-bold ${isDangerous ? 'text-[#B8FFFA]' : 'text-text-primary'}`}>
               {title}
             </h2>
           </div>
@@ -83,8 +83,8 @@ export default function ConfirmationModal({ isOpen, onConfirm, onCancel, title, 
                 transition-all duration-200 disabled:opacity-50
                 focus-visible:outline-none focus-visible:ring-2
                 ${isDangerous
-                  ? 'border border-red-300/30 bg-red-500/20 text-red-200 hover:bg-red-500/30 focus-visible:ring-red-400'
-                  : 'border border-green-300/30 bg-green-500/20 text-green-200 hover:bg-green-500/30 focus-visible:ring-green-400'
+                  ? 'border border-[#45A29E]/30 bg-[#45A29E]/20 text-[#B8FFFA] hover:bg-[#45A29E]/30 focus-visible:ring-[#66FCF1]'
+                  : 'border border-[#66FCF1]/30 bg-[#66FCF1]/20 text-[#66FCF1] hover:bg-[#66FCF1]/30 focus-visible:ring-[#66FCF1]'
                 }
               `}
             >
