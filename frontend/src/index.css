@@ -20,13 +20,25 @@ body,
   min-height: 100svh;
 }
 
+:root {
+  --app-text-color: #cdd6f4;
+}
+
 body {
   overflow-x: hidden;
   background-color: #0B0C10;
-  color: #C5C6C7;
+  color: var(--app-text-color);
   font-family: 'IBM Plex Sans', 'Sora', ui-sans-serif, sans-serif;
   line-height: 1.5;
   letter-spacing: 0.005em;
+}
+
+/* Force a single text color across the full UI, including utility class overrides. */
+body,
+body *,
+body *::before,
+body *::after {
+  color: var(--app-text-color) !important;
 }
 
 #root {
@@ -393,7 +405,8 @@ a:focus {
 
 /* Placeholder text color */
 ::placeholder {
-  color: #8E969F;
+  color: var(--app-text-color);
+  opacity: 0.7;
 }
 
 /* Selection color */

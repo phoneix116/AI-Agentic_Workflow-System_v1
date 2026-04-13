@@ -92,6 +92,8 @@ build/
 
 # Docker
 .dockerignore
+!backend/.dockerignore
+!frontend/.dockerignore
 docker-compose.override.yml
 *.yml
 *.yaml

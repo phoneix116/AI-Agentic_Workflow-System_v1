@@ -124,7 +124,11 @@ export default function ChatPanel() {
         toolResults: normalizedResponse.toolResults,
       }
 
-      if (normalizedResponse.approvalRequired && normalizedResponse.approvalId) {
+      const hasApprovalActionCard = aiMessage.actionCards.some(
+        (card) => card?.payload?.approval_id === normalizedResponse.approvalId,
+      )
+
+      if (normalizedResponse.approvalRequired && normalizedResponse.approvalId && !hasApprovalActionCard) {
         aiMessage.actionCards.push({
           id: `approval-${normalizedResponse.approvalId}`,
           label: '✓ Approve',

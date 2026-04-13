@@ -146,6 +146,39 @@ class AgentOrchestrator:
         if self._run_planner_with_llm(state, user_context=user_context):
             return
 
+        raw_message = state.user_input.content or ""
+        if self._is_explicit_new_email_request(raw_message):
+            state.plan = PlannerOutput(
+                action_type=PlannerDecision.EMAIL_DRAFT,
+                reasoning="Planner LLM unavailable; explicit outbound email request routed to send_new_email tool.",
+                tools_required=[self._build_send_new_email_requirement(raw_message)],
+                requires_approval=True,
+                approval_reason="Sending email requires approval",
+                confidence=0.8,
+                estimated_duration_seconds=2.0,
+            )
+            state.current_node = "planner"
+            state.metadata.nodes_executed.append("planner")
+            return
+
+        outbound_follow_up_params = self._infer_send_new_email_follow_up_params(
+            user_message=raw_message,
+            user_context=user_context,
+        )
+        if outbound_follow_up_params is not None:
+            state.plan = PlannerOutput(
+                action_type=PlannerDecision.EMAIL_DRAFT,
+                reasoning="Planner LLM unavailable; contextual outbound email follow-up routed to send_new_email tool.",
+                tools_required=[ToolRequirement(tool_name="send_new_email", parameters=outbound_follow_up_params)],
+                requires_approval=True,
+                approval_reason="Sending email requires approval",
+                confidence=0.75,
+                estimated_duration_seconds=2.0,
+            )
+            state.current_node = "planner"
+            state.metadata.nodes_executed.append("planner")
+            return
+
         logger.warning(
             "orchestration.planner.llm_failed_no_fallback",
             extra={"trace_id": state.trace_id, "user_id": state.user_id},
@@ -171,6 +204,7 @@ class AgentOrchestrator:
             "summarize_inbox",
             "check_urgent_emails",
             "generate_draft_reply",
+            "send_new_email",
             "list_tasks",
             "create_task",
             "update_task",
@@ -256,10 +290,25 @@ class AgentOrchestrator:
                     ]
                     reasoning = f"{reasoning} Follow-up interpreted as calendar event creation continuation."
 
+            if action_enum == PlannerDecision.CHAT_RESPONSE and not tools_required:
+                outbound_follow_up_params = self._infer_send_new_email_follow_up_params(
+                    user_message=state.user_input.content or "",
+                    user_context=user_context,
+                )
+                if outbound_follow_up_params is not None:
+                    action_enum = PlannerDecision.EMAIL_DRAFT
+                    tools_required = [
+                        ToolRequirement(
+                            tool_name="send_new_email",
+                            parameters=outbound_follow_up_params,
+                        )
+                    ]
+                    reasoning = f"{reasoning} Follow-up interpreted as outbound email send continuation."
+
             if self._is_explicit_new_email_request(state.user_input.content or ""):
-                action_enum = PlannerDecision.CHAT_RESPONSE
-                tools_required = []
-                reasoning = f"{reasoning} Direct outbound email compose request interpreted as chat drafting flow."
+                action_enum = PlannerDecision.EMAIL_DRAFT
+                tools_required = [self._build_send_new_email_requirement(state.user_input.content or "")]
+                reasoning = f"{reasoning} Direct outbound email compose request routed to outbound email tool."
 
             state.plan = PlannerOutput(
                 action_type=action_enum,
@@ -313,6 +362,13 @@ class AgentOrchestrator:
             params = dict(requirement.parameters)
 
             if tool_name == "generate_draft_reply":
+                email_id_value = str(params.get("email_id") or "").strip()
+                if self._looks_like_email_address(email_id_value):
+                    tool_name = "send_new_email"
+                    params = {
+                        "recipient": email_id_value,
+                        "topic_or_body": self._extract_email_topic(state.user_input.content or "") or "Hi",
+                    }
                 params = self._normalize_generate_draft_params(params=params, tools=tools, user=user)
 
             if str(params.get("email_id") or "").strip().lower() in self._LATEST_EMAIL_ALIASES:
@@ -590,6 +646,12 @@ class AgentOrchestrator:
                 f"{ordered}. For a full-day one-time event, share the date and I can set it from 00:00 to 00:00 the next day."
             )
 
+        if tool_name == "send_new_email":
+            return (
+                "I can prepare that email, but I still need: "
+                f"{ordered}. Please share the recipient address and what the email should say."
+            )
+
         return f"I can run {tool_name}, but I still need: {ordered}."
 
     @staticmethod
@@ -611,6 +673,31 @@ class AgentOrchestrator:
                 extracted_link = AgentOrchestrator._extract_first_url(message)
                 if extracted_link:
                     enriched["link"] = extracted_link
+            return enriched
+
+        if tool_name == "send_new_email":
+            recipient_aliases = ["to", "to_recipient", "recipient_email", "email"]
+            for key in recipient_aliases:
+                value = enriched.get(key)
+                if isinstance(value, str) and value.strip() and not enriched.get("recipient"):
+                    enriched["recipient"] = value.strip()
+
+            topic_aliases = ["topic", "about", "body", "message", "content"]
+            for key in topic_aliases:
+                value = enriched.get(key)
+                if isinstance(value, str) and value.strip() and not enriched.get("topic_or_body"):
+                    enriched["topic_or_body"] = value.strip()
+
+            if not enriched.get("recipient"):
+                extracted_recipient = AgentOrchestrator._extract_email_recipient(user_message or "")
+                if extracted_recipient:
+                    enriched["recipient"] = extracted_recipient
+
+            if not enriched.get("topic_or_body"):
+                extracted_topic = AgentOrchestrator._extract_email_topic(user_message or "")
+                if extracted_topic:
+                    enriched["topic_or_body"] = extracted_topic
+
             return enriched
 
         if tool_name != "create_event":
@@ -979,7 +1066,7 @@ class AgentOrchestrator:
 
     def _capture_pending_approval(self, state: AgentState, user: User, tool_name: str, result: dict) -> None:
         approval_id = result.get("approval_id")
-        if not approval_id and result.get("requires_approval") and tool_name == "generate_draft_reply":
+        if not approval_id and result.get("requires_approval") and tool_name in {"generate_draft_reply", "send_new_email"}:
             approval_id = self._create_draft_approval(user, result)
 
         if not approval_id:
@@ -1245,10 +1332,6 @@ class AgentOrchestrator:
         raw_text = (state.user_input.content or "").strip()
         user_text = (state.user_input.content or "").strip().lower()
 
-        direct_compose = self._generate_direct_email_compose_reply(raw_text)
-        if direct_compose:
-            return direct_compose
-
         if self._is_affirmative_help_follow_up(user_text):
             recipient = self._extract_recent_email_recipient_from_context(state)
             if recipient:
@@ -1295,6 +1378,27 @@ class AgentOrchestrator:
         return any(re.search(pattern, user_text.strip()) for pattern in patterns)
 
     @staticmethod
+    def _is_send_confirmation_follow_up(user_text: str) -> bool:
+        text = re.sub(r"\s+", " ", (user_text or "").strip().lower())
+        if not text:
+            return False
+
+        strong_patterns = [
+            r"\bsend(\s+it|\s+this|\s+that)?\b",
+            r"\bgo\s+ahead\b",
+            r"\bdo\s+it\b",
+            r"\bship\s+it\b",
+            r"\bsubmit\s+it\b",
+        ]
+        if any(re.search(pattern, text) for pattern in strong_patterns):
+            return True
+
+        affirmative_tokens = {"yes", "yep", "yeah", "sure", "ok", "okay", "please", "cool", "fine", "done"}
+        send_tokens = {"send", "mail", "email", "it", "that", "this"}
+        words = set(re.findall(r"[a-z]+", text))
+        return bool(words & affirmative_tokens) and bool(words & send_tokens)
+
+    @staticmethod
     def _extract_recent_email_recipient_from_context(state: AgentState) -> str | None:
         """Extract recipient email from recent turns when assistant asked about composing an email."""
         user_context = dict((state.user_input.context or {}).get("user_context") or {})
@@ -1334,6 +1438,72 @@ class AgentOrchestrator:
         return None
 
     @staticmethod
+    def _extract_recent_email_recipient_any_context(user_context: dict[str, Any]) -> str | None:
+        """Extract an email address from any recent turn, assistant or user."""
+        conversation_context = dict((user_context or {}).get("conversation_context") or {})
+        recent_turns = conversation_context.get("recent_turns")
+
+        if not isinstance(recent_turns, list) or not recent_turns:
+            return None
+
+        email_pattern = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
+        for turn in reversed(recent_turns):
+            if not isinstance(turn, dict):
+                continue
+            content = str(turn.get("content") or "")
+            match = email_pattern.search(content)
+            if match:
+                return match.group(0)
+
+        return None
+
+    @staticmethod
+    def _infer_send_new_email_follow_up_params(
+        user_message: str,
+        user_context: dict[str, Any],
+    ) -> dict[str, Any] | None:
+        """Infer send_new_email params from short confirmations like 'cool send'."""
+        text = (user_message or "").strip()
+        if not AgentOrchestrator._is_send_confirmation_follow_up(text):
+            return None
+
+        recipient = AgentOrchestrator._extract_recent_email_recipient_any_context(user_context)
+        if not recipient:
+            return None
+
+        topic = AgentOrchestrator._extract_recent_email_topic_any_context(user_context) or "Hello"
+
+        return {
+            "recipient": recipient,
+            "topic_or_body": topic,
+        }
+
+    @staticmethod
+    def _extract_recent_email_topic_any_context(user_context: dict[str, Any]) -> str | None:
+        """Recover the most recent outbound-email topic from prior user turns when available."""
+        conversation_context = dict((user_context or {}).get("conversation_context") or {})
+        recent_turns = conversation_context.get("recent_turns")
+
+        if not isinstance(recent_turns, list) or not recent_turns:
+            return None
+
+        for turn in reversed(recent_turns):
+            if not isinstance(turn, dict):
+                continue
+            if str(turn.get("role") or "").lower() != "user":
+                continue
+
+            content = str(turn.get("content") or "").strip()
+            if not content:
+                continue
+
+            topic = AgentOrchestrator._extract_email_topic(content)
+            if topic:
+                return topic
+
+        return None
+
+    @staticmethod
     def _is_explicit_new_email_request(user_text: str) -> bool:
         text = (user_text or "").strip().lower()
         if not text:
@@ -1341,8 +1511,58 @@ class AgentOrchestrator:
 
         has_email_verb = any(token in text for token in ["send", "sent", "compose", "draft", "write"])
         has_email_noun = any(token in text for token in ["email", "mail"])
-        has_recipient = bool(re.search(r"\bto\s+[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", text))
+        has_recipient = bool(AgentOrchestrator._extract_email_recipient(text))
         return has_email_verb and has_email_noun and has_recipient
+
+    @staticmethod
+    def _looks_like_email_address(value: str) -> bool:
+        return bool(re.fullmatch(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", (value or "").strip()))
+
+    @staticmethod
+    def _extract_email_recipient(user_text: str) -> str | None:
+        match = re.search(r"\bto\s+([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})\b", user_text or "", flags=re.IGNORECASE)
+        if not match:
+            return None
+        return match.group(1).strip()
+
+    @staticmethod
+    def _extract_email_topic(user_text: str) -> str | None:
+        text = (user_text or "").strip()
+        if not text:
+            return None
+
+        details_match = re.search(r"\b(?:regarding|about|for)\b\s+(.+)$", text, flags=re.IGNORECASE)
+        if details_match:
+            details = details_match.group(1).strip(" .")
+            if details:
+                return details
+
+        recipient_match = re.search(
+            r"\bto\s+[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if not recipient_match:
+            return None
+
+        remainder = text[recipient_match.end():].strip(" .,")
+        for prefix in ["email", "mail", "about", "regarding", "for"]:
+            if remainder.lower().startswith(prefix + " "):
+                remainder = remainder[len(prefix):].strip(" .,")
+        return remainder or None
+
+    @staticmethod
+    def _build_send_new_email_requirement(user_text: str) -> ToolRequirement:
+        params: dict[str, Any] = {}
+        recipient = AgentOrchestrator._extract_email_recipient(user_text)
+        topic = AgentOrchestrator._extract_email_topic(user_text)
+
+        if recipient:
+            params["recipient"] = recipient
+        if topic:
+            params["topic_or_body"] = topic
+
+        return ToolRequirement(tool_name="send_new_email", parameters=params)
 
     @staticmethod
     def _generate_direct_email_compose_reply(user_text: str) -> str | None:

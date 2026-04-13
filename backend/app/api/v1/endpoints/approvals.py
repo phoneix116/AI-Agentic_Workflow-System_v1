@@ -138,19 +138,62 @@ async def execute_approved_action(
         }
     )
     
-    # TODO: Route to actual tool execution based on action_type
-    # For now, return placeholder
-    execution_result = {
+    if action_type == Approval.ApprovalType.SEND_EMAIL:
+        from app.schemas.email import EmailDraft
+        from app.services.email_service import EmailService
+
+        user = db.query(User).filter(User.id == approval.user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found for approval execution",
+            )
+
+        draft = EmailDraft(
+            id=action_payload.get("draft_id") or f"approval-{approval.id}",
+            thread_id=action_payload.get("thread_id") or "",
+            to_recipient=action_payload.get("to_recipient") or "",
+            subject=action_payload.get("subject"),
+            body=action_payload.get("body") or "",
+            tone=action_payload.get("tone", "professional"),
+            confidence=float(action_payload.get("confidence", 0.8) or 0.8),
+            metadata={
+                "cc": action_payload.get("cc", []),
+                "bcc": action_payload.get("bcc", []),
+            },
+            created_at=approval.created_at,
+        )
+
+        email_service = EmailService(db)
+        message_id = email_service.send_approved_email(
+            user=user,
+            draft=draft,
+            thread_id=action_payload.get("thread_id"),
+        )
+
+        if not message_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to execute approved email send",
+            )
+
+        return {
+            "action_type": action_type,
+            "status": "executed",
+            "message_id": message_id,
+            "thread_id": action_payload.get("thread_id"),
+            "recipient": action_payload.get("to_recipient"),
+            "subject": action_payload.get("subject"),
+            "executed_at": datetime.utcnow().isoformat(),
+            "trace_id": trace_id,
+        }
+
+    return {
         "action_type": action_type,
         "status": "executed",
         "executed_at": datetime.utcnow().isoformat(),
         "trace_id": trace_id,
     }
-    
-    # In production, would also update related records
-    # (send email, create task, etc. based on action_type)
-    
-    return execution_result
 
 
 async def expire_stale_user_approvals(
@@ -294,6 +337,7 @@ async def approve_action(
     approval_id: str,
     current_user: User = Depends(get_current_user_from_db),
     db: Session = Depends(get_db),
+    redis_client = Depends(get_redis),
 ) -> dict:
     """
     Approve a pending action.
@@ -301,7 +345,7 @@ async def approve_action(
     After approval, the action tool can be executed.
     """
     trace_id = str(uuid4())
-    await expire_stale_user_approvals(db=db, redis_client=get_redis(), user_id=current_user.id, trace_id=trace_id)
+    await expire_stale_user_approvals(db=db, redis_client=redis_client, user_id=current_user.id, trace_id=trace_id)
 
     approval = db.query(Approval).filter(
         Approval.id == approval_id,
@@ -328,17 +372,38 @@ async def approve_action(
             detail="Approval has expired",
         )
     
-    # Approve the action
+    # Approve and execute action to preserve compatibility with existing clients.
     approval.status = Approval.ApprovalStatus.APPROVED
     approval.approved_by = current_user.id
     approval.approved_at = datetime.utcnow()
+
+    execution_result = await execute_approved_action(
+        db,
+        redis_client,
+        approval,
+        trace_id,
+    )
+
     db.commit()
+
+    await broadcast_approval_event(
+        redis_client,
+        current_user.id,
+        "approvals:approved",
+        approval_id,
+        {
+            "execution_result": execution_result,
+            "action_type": approval.approval_type,
+        },
+        trace_id,
+    )
     
     return {
         "success": True,
         "approval_id": approval_id,
         "status": "approved",
-        "message": "Action approved and ready for execution",
+        "execution_result": execution_result,
+        "message": "Action approved and executed",
     }
 
 

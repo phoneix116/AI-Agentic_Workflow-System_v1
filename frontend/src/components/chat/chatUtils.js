@@ -76,5 +76,22 @@ export function formatToolResultPreview(result) {
     return preview ? `${count} saved search note(s): ${preview}${count > notes.length ? '...' : ''}` : `${count} saved search note(s).`
   }
 
+  if (result.tool_name === 'send_new_email') {
+    const draft = payload.draft || {}
+    const to = draft.to_recipient || 'recipient'
+    const subject = draft.subject || '(no subject)'
+    const body = typeof draft.body === 'string' ? draft.body.replace(/\s+/g, ' ').trim() : ''
+    const snippet = body ? body.slice(0, 100) : 'Draft prepared.'
+    return `Draft for ${to} | Subject: ${subject} | ${snippet}${body.length > 100 ? '...' : ''}`
+  }
+
+  if (result.tool_name === 'generate_draft_reply') {
+    const draft = payload.draft || {}
+    const to = draft.to_recipient || 'recipient'
+    const body = typeof draft.body === 'string' ? draft.body.replace(/\s+/g, ' ').trim() : ''
+    const snippet = body ? body.slice(0, 100) : 'Reply draft prepared.'
+    return `Reply draft for ${to}: ${snippet}${body.length > 100 ? '...' : ''}`
+  }
+
   return JSON.stringify(payload).slice(0, 180)
 }

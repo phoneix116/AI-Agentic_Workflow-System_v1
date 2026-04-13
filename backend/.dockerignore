@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# VCS and editor
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Local data and logs
+logs/
+*.log
+
+# Test and reports artifacts
+htmlcov/
+.coverage
+coverage.xml
+
+# OS files
+.DS_Store

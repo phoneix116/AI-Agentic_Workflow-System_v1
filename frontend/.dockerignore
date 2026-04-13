@@ -1,0 +1,17 @@
+# Dependencies and build artifacts
+node_modules/
+dist/
+
+# VCS and editor
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store

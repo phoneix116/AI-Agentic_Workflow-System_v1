@@ -196,6 +196,17 @@ class EmailDraftRequest(BaseModel):
     )
 
 
+class EmailComposeRequest(BaseModel):
+    """Request to compose a brand-new outbound email."""
+
+    recipient: str = Field(..., description="Primary email recipient")
+    topic_or_body: str = Field(..., description="Topic or body instructions for email generation")
+    subject: Optional[str] = Field(None, description="Optional explicit subject line")
+    tone: Literal["professional", "casual", "formal", "friendly"] = Field(default="professional")
+    cc: Optional[list[str]] = Field(default=None, description="Optional CC recipients")
+    bcc: Optional[list[str]] = Field(default=None, description="Optional BCC recipients")
+
+
 class EmailDraft(BaseModel):
     """AI-generated email draft."""
     
@@ -237,6 +248,15 @@ class EmailDraftResponse(BaseModel):
         None,
         description="Link to approval workflow"
     )
+    trace_id: Optional[str] = None
+
+
+class EmailComposeResponse(BaseModel):
+    """New outbound email compose response (pending approval)."""
+
+    draft: EmailDraft
+    approval_required: bool = Field(default=True)
+    approval_id: Optional[str] = Field(None)
     trace_id: Optional[str] = None
 
 

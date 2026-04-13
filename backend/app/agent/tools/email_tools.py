@@ -11,7 +11,7 @@ Tools that the planner node can invoke to:
 import json
 import logging
 from time import perf_counter
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from sqlalchemy.orm import Session
 
 from app.core.logging_config import get_trace_id
@@ -321,12 +321,97 @@ def create_email_tools(db: Session):
                 exc_info=True,
             )
             return {"error": str(e), "status": "failed"}
+
+    def send_new_email(
+        user_id: str,
+        recipient: str,
+        topic_or_body: str,
+        subject: Optional[str] = None,
+        tone: str = "professional",
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        """Generate and stage a new outbound email for approval-based send."""
+        start = perf_counter()
+        trace_id = get_trace_id() or "N/A"
+        try:
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                return {"error": "User not found", "status": "failed"}
+
+            gmail_client = service.get_gmail_client(user)
+            if not gmail_client:
+                return {"error": "Gmail not connected", "status": "failed"}
+
+            draft = service.compose_new_email_draft(
+                user=user,
+                recipient=recipient,
+                topic_or_body=topic_or_body,
+                tone=tone,
+                subject=subject,
+                cc=cc,
+                bcc=bcc,
+            )
+
+            if not draft:
+                return {"error": "Failed to compose outbound email", "status": "failed"}
+
+            approval_id = service.create_approval_for_draft(
+                user=user,
+                draft=draft,
+                email_id=None,
+            )
+
+            response = {
+                "status": "success",
+                "draft": {
+                    "id": draft.id,
+                    "body": draft.body,
+                    "tone": draft.tone,
+                    "confidence": draft.confidence,
+                    "thread_id": draft.thread_id,
+                    "to_recipient": draft.to_recipient,
+                    "subject": draft.subject,
+                    "cc": (draft.metadata or {}).get("cc", []),
+                    "bcc": (draft.metadata or {}).get("bcc", []),
+                },
+                "requires_approval": True,
+                "approval_id": approval_id,
+                "action_type": "send_email",
+            }
+            duration_ms = (perf_counter() - start) * 1000
+            metrics_collector.record_agent_step("tool.send_new_email", "success", duration_ms)
+            logger.info(
+                "tool.send_new_email.success",
+                extra={
+                    "trace_id": trace_id,
+                    "user_id": user_id,
+                    "duration_ms": round(duration_ms, 2),
+                    "recipient": recipient,
+                },
+            )
+            return response
+        except Exception as e:
+            duration_ms = (perf_counter() - start) * 1000
+            metrics_collector.record_agent_step("tool.send_new_email", "error", duration_ms)
+            logger.error(
+                "tool.send_new_email.error",
+                extra={
+                    "trace_id": trace_id,
+                    "user_id": user_id,
+                    "duration_ms": round(duration_ms, 2),
+                    "recipient": recipient,
+                },
+                exc_info=True,
+            )
+            return {"error": str(e), "status": "failed"}
     
     return {
         "fetch_latest_emails": fetch_latest_emails,
         "summarize_inbox": summarize_inbox,
         "check_urgent_emails": check_urgent_emails,
         "generate_draft_reply": generate_draft_reply,
+        "send_new_email": send_new_email,
     }
 
 
@@ -365,3 +450,8 @@ def check_urgent_emails(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
 def generate_draft_reply(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
     """Compatibility wrapper for tests and legacy imports."""
     raise NotImplementedError("Use create_email_tools(db)['generate_draft_reply']")
+
+
+def send_new_email(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
+    """Compatibility wrapper for tests and legacy imports."""
+    raise NotImplementedError("Use create_email_tools(db)['send_new_email']")

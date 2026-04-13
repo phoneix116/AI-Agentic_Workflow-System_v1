@@ -23,6 +23,8 @@ from app.schemas.email import (
     EmailSummaryResponse,
     EmailDraftRequest,
     EmailDraftResponse,
+    EmailComposeRequest,
+    EmailComposeResponse,
     EmailSendRequest,
     EmailSendResponse,
 )
@@ -288,6 +290,45 @@ async def generate_draft_reply(
     )
 
 
+@router.post("/compose", response_model=EmailComposeResponse, summary="Compose new outbound email")
+async def compose_new_email(
+    request: EmailComposeRequest,
+    current_user: User = Depends(get_current_user_from_db),
+    db: Session = Depends(get_db),
+) -> EmailComposeResponse:
+    """Generate a new outbound email draft and create an approval request."""
+    service = EmailService(db)
+
+    draft = service.compose_new_email_draft(
+        user=current_user,
+        recipient=request.recipient,
+        topic_or_body=request.topic_or_body,
+        tone=request.tone,
+        subject=request.subject,
+        cc=request.cc,
+        bcc=request.bcc,
+    )
+
+    if not draft:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to compose outbound email",
+        )
+
+    approval_id = service.create_approval_for_draft(
+        user=current_user,
+        draft=draft,
+        email_id=None,
+    )
+
+    return EmailComposeResponse(
+        draft=draft,
+        approval_required=True,
+        approval_id=approval_id,
+        trace_id=(draft.metadata or {}).get("generated_at"),
+    )
+
+
 @router.post("/send", response_model=EmailSendResponse, summary="Send approved email")
 async def send_email(
     request: EmailSendRequest,
@@ -334,6 +375,10 @@ async def send_email(
         body=action_data.get("body"),
         tone=action_data.get("tone", "professional"),
         confidence=action_data.get("confidence", 0.8),
+        metadata={
+            "cc": action_data.get("cc", []),
+            "bcc": action_data.get("bcc", []),
+        },
         created_at=approval.created_at,
     )
     

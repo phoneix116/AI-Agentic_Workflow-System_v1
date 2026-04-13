@@ -6,6 +6,7 @@ export default function ChatBubble({ message }) {
   const isAI = message.type === 'ai'
   const [actionResult, setActionResult] = useState(null)
   const [isExecuting, setIsExecuting] = useState(null)
+  const [actionResolved, setActionResolved] = useState(false)
 
   const hasActionCards = message.actionCards && message.actionCards.length > 0
   const toolResults = message.toolResults || []
@@ -36,23 +37,25 @@ export default function ChatBubble({ message }) {
     setIsExecuting(action.id)
     try {
       if (action.action === 'approve' && action.payload) {
-        await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/approve`, {
+        const response = await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/decide?decision=approve`, {
           method: 'POST',
           body: JSON.stringify({}),
         })
-        setActionResult('✓ Approved successfully')
+        const messageId = response?.execution_result?.message_id
+        setActionResult(messageId ? `✓ Approved and sent (message: ${messageId})` : '✓ Approved successfully')
+        setActionResolved(true)
       } else if (action.action === 'reject' && action.payload) {
-        await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/reject?reason=User+rejected+through+chat`, {
+        await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/decide?decision=reject&reason=User+rejected+through+chat`, {
           method: 'POST',
           body: JSON.stringify({}),
         })
         setActionResult('✗ Rejected')
+        setActionResolved(true)
       }
     } catch (error) {
       setActionResult(`Action failed: ${error.message}`)
     } finally {
       setIsExecuting(null)
-      window.setTimeout(() => setActionResult(null), 3000)
     }
   }
 
@@ -132,7 +135,7 @@ export default function ChatBubble({ message }) {
                 key={card.id}
                 type="button"
                 onClick={() => handleActionClick(card)}
-                disabled={isExecuting === card.id}
+                disabled={actionResolved || isExecuting === card.id}
                 className={`w-full rounded-lg border px-3 py-2 text-left font-semibold transition-all disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 ${
                   card.action === 'reject'
                     ? 'border-[#45A29E]/45 bg-[#45A29E]/12 text-[#B8FFFA] hover:bg-[#45A29E]/20 focus-visible:ring-[#45A29E]'

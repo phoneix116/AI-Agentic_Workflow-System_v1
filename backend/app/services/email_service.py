@@ -515,29 +515,23 @@ class EmailService:
         self,
         user: User,
         draft: EmailDraft,
-        email_id: str,
+        email_id: Optional[str] = None,
     ) -> Optional[str]:
-        """
-        Create approval request for email draft.
-        
-        Args:
-            user: User object
-            draft: EmailDraft to approve
-            email_id: Original email ID
-            
-        Returns:
-            Approval ID or None if failed
-        """
+        """Create approval request for an email draft."""
         action_payload = {
             "draft_id": draft.id,
             "thread_id": draft.thread_id,
             "to_recipient": draft.to_recipient,
-            "subject": draft.subject or f"Re: {draft.subject}",
+            "subject": draft.subject or "(no subject)",
             "body": draft.body,
             "tone": draft.tone,
             "confidence": draft.confidence,
+            "cc": (draft.metadata or {}).get("cc", []),
+            "bcc": (draft.metadata or {}).get("bcc", []),
         }
-        
+        if email_id:
+            action_payload["email_id"] = email_id
+
         try:
             approval = Approval(
                 user_id=user.id,
@@ -547,12 +541,11 @@ class EmailService:
                 confidence_score=draft.confidence,
                 expires_at=datetime.utcnow() + timedelta(minutes=15),
             )
-            
+
             self.db.add(approval)
             self.db.commit()
-            
             return approval.id
-        
+
         except Exception as e:
             logger.error(f"Error creating approval: {e}")
             self.db.rollback()
@@ -563,37 +556,28 @@ class EmailService:
                     draft.id,
                 )
             return None
-    
+
     def send_approved_email(
         self,
         user: User,
         draft: EmailDraft,
-        thread_id: str,
+        thread_id: Optional[str] = None,
     ) -> Optional[str]:
-        """
-        Send approved email draft via Gmail.
-        
-        Args:
-            user: User object
-            draft: EmailDraft to send
-            thread_id: Gmail thread ID
-            
-        Returns:
-            Sent message ID or None if failed
-        """
+        """Send approved email draft via Gmail."""
         gmail_client = self.get_gmail_client(user)
         if not gmail_client:
             return None
-        
+
         try:
             message_id = gmail_client.send_message(
                 to=draft.to_recipient,
                 subject=draft.subject or "(no subject)",
                 body=draft.body,
                 thread_id=thread_id,
+                cc=(draft.metadata or {}).get("cc"),
+                bcc=(draft.metadata or {}).get("bcc"),
             )
-            
-            # Store sent email in DB
+
             if message_id:
                 email_obj = Email(
                     user_id=user.id,
@@ -607,15 +591,69 @@ class EmailService:
                 )
                 self.db.add(email_obj)
                 self.db.commit()
-            
+
             return message_id
-        
         except Exception as e:
             logger.error(f"Error sending email: {e}")
             return None
-    
+
+    def compose_new_email_draft(
+        self,
+        user: User,
+        recipient: str,
+        topic_or_body: str,
+        tone: str = "professional",
+        subject: Optional[str] = None,
+        cc: Optional[List[str]] = None,
+        bcc: Optional[List[str]] = None,
+    ) -> Optional[EmailDraft]:
+        """Generate a new outbound email draft for approval and sending."""
+        gmail_client = self.get_gmail_client(user)
+        if not gmail_client:
+            return None
+
+        normalized_recipient = (recipient or "").strip()
+        normalized_topic = (topic_or_body or "").strip()
+        normalized_subject = (subject or "").strip() or None
+
+        if not normalized_recipient or not normalized_topic:
+            return None
+
+        generated_subject = normalized_subject
+        generated_body = normalized_topic
+        confidence = 0.75
+
+        if normalized_subject is None:
+            generated_subject, generated_body, confidence = self._generate_new_email_content(
+                user_id=user.id,
+                recipient=normalized_recipient,
+                topic_or_body=normalized_topic,
+                tone=tone,
+            )
+
+        if not generated_subject:
+            generated_subject = "(no subject)"
+
+        return EmailDraft(
+            id="draft-" + datetime.utcnow().isoformat(),
+            thread_id="",
+            to_recipient=normalized_recipient,
+            subject=generated_subject,
+            body=generated_body,
+            tone=tone,
+            confidence=confidence,
+            metadata={
+                "generated_at": datetime.utcnow().isoformat(),
+                "compose_mode": "new_email",
+                "topic": normalized_topic,
+                "cc": cc or [],
+                "bcc": bcc or [],
+            },
+            created_at=datetime.utcnow(),
+        )
+
     # Private helper methods for LLM-based operations
-    
+
     def _classify_email_urgency(
         self,
         user_id: str,
@@ -626,11 +664,11 @@ class EmailService:
         """Classify email urgency using LLM."""
         prompt = ChatPromptTemplate.from_template("""
         Analyze this email and classify its urgency level.
-        
+
         From: {from_address}
         Subject: {subject}
         Body: {body}
-        
+
         Respond with JSON:
         {{
             "urgency_level": "low|medium|high|critical",
@@ -638,7 +676,7 @@ class EmailService:
             "suggested_action": "recommended action or null"
         }}
         """)
-        
+
         try:
             chain = prompt | self.llm | JsonOutputParser()
             payload = {
@@ -657,9 +695,9 @@ class EmailService:
                 completion_tokens=completion_tokens,
                 source="email_urgency_classification",
             )
-            
+
             return result
-        
+
         except Exception as e:
             logger.warning(f"Error classifying urgency: {e}")
             return {
@@ -667,7 +705,7 @@ class EmailService:
                 "reason": "Classification failed, defaulting to medium",
                 "suggested_action": None,
             }
-    
+
     def _generate_draft_body(
         self,
         user_id: str,
@@ -680,33 +718,29 @@ class EmailService:
         """Generate email draft body using LLM."""
         prompt = ChatPromptTemplate.from_template("""
         Generate an email reply in {tone} tone.
-        
+
         Original email from: {from_address}
         Subject: {original_subject}
         Body: {original_body}
-        
+
         {context_instruction}
-        
+
         Respond with JSON:
         {{
             "draft_body": "generated email body",
             "confidence": 0.0-1.0
         }}
         """)
-        
-        context_instruction = ""
-        if context:
-            context_instruction = f"Additional context: {context}"
-        else:
-            context_instruction = "Write a professional, concise reply."
-        
+
+        context_instruction = f"Additional context: {context}" if context else "Write a professional, concise reply."
+
         try:
             chain = prompt | self.llm | JsonOutputParser()
             payload = {
                 "tone": tone,
                 "from_address": from_address,
                 "original_subject": original_subject,
-                "original_body": original_body[:1000],  # Limit for API
+                "original_body": original_body[:1000],
                 "context_instruction": context_instruction,
             }
             result = chain.invoke(payload)
@@ -722,15 +756,67 @@ class EmailService:
                 completion_tokens=completion_tokens,
                 source="email_draft_generation",
             )
-            
-            return (
-                result.get("draft_body", ""),
-                float(result.get("confidence", 0.7))
-            )
-        
+
+            return result.get("draft_body", ""), float(result.get("confidence", 0.7))
         except Exception as e:
             logger.error(f"Error generating draft: {e}")
             return "(Unable to generate draft)", 0.0
+
+    def _generate_new_email_content(
+        self,
+        user_id: str,
+        recipient: str,
+        topic_or_body: str,
+        tone: str = "professional",
+    ) -> tuple[str, str, float]:
+        """Generate subject and body for a new outbound email from a topic prompt."""
+        prompt = ChatPromptTemplate.from_template(
+            """
+        You are composing a new outbound email.
+
+        Recipient: {recipient}
+        Tone: {tone}
+        User intent/topic: {topic_or_body}
+
+        If topic_or_body is already a full email body, keep it mostly intact and produce a concise fitting subject.
+        Otherwise, write a clear, concise email body with greeting and closing.
+
+        Respond with JSON:
+        {{
+            "subject": "generated subject line",
+            "body": "generated email body",
+            "confidence": 0.0-1.0
+        }}
+        """
+        )
+
+        try:
+            chain = prompt | self.llm | JsonOutputParser()
+            payload = {
+                "recipient": recipient,
+                "tone": tone,
+                "topic_or_body": topic_or_body[:2000],
+            }
+            result = chain.invoke(payload)
+
+            prompt_tokens = self._estimate_tokens(f"{recipient}\n{tone}\n{topic_or_body[:2000]}")
+            completion_tokens = self._estimate_tokens(json.dumps(result))
+            self._record_llm_usage(
+                user_id=user_id,
+                model=settings.groq_execution_model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                source="email_new_compose_generation",
+            )
+
+            subject = str(result.get("subject") or "").strip() or "(no subject)"
+            body = str(result.get("body") or "").strip() or topic_or_body
+            confidence = float(result.get("confidence", 0.75))
+            return subject, body, confidence
+        except Exception as e:
+            logger.error(f"Error generating new outbound email content: {e}")
+            fallback_subject = "Request" if len(topic_or_body) > 32 else topic_or_body[:32].strip() or "(no subject)"
+            return fallback_subject, topic_or_body, 0.0
     
     def _generate_inbox_summary(self, user_id: str, emails: List[Dict[str, Any]]) -> str:
         """Generate inbox summary using LLM."""
