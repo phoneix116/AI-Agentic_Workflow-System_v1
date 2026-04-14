@@ -814,6 +814,21 @@ class AgentOrchestrator:
         if "today" in message:
             return datetime.utcnow().date().isoformat()
 
+        month_name_match = re.search(
+            r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:,?\s*(\d{4}))?\b",
+            message,
+            flags=re.IGNORECASE,
+        )
+        if month_name_match:
+            month_name = month_name_match.group(1)
+            day_value = int(month_name_match.group(2))
+            year_value = int(month_name_match.group(3)) if month_name_match.group(3) else datetime.utcnow().year
+            try:
+                parsed = datetime.strptime(f"{month_name} {day_value} {year_value}", "%B %d %Y")
+                return parsed.date().isoformat()
+            except Exception:
+                pass
+
         return None
 
     @staticmethod
@@ -874,7 +889,13 @@ class AgentOrchestrator:
             flags=re.IGNORECASE | re.DOTALL,
         )
         if not title_match:
-            return None
+            title_match = re.search(
+                r"\bcalled\s+(.+?)(?=(?:\bstart\b|\bend\b|\bon\b|\bat\b|\bfrom\b|\bto\b|$))",
+                text,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            if not title_match:
+                return None
 
         title = title_match.group(1).strip().strip(".,")
         return title or None
@@ -924,6 +945,16 @@ class AgentOrchestrator:
             except Exception:
                 continue
 
+        time_fragment_match = re.search(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b", normalized)
+        if time_fragment_match:
+            time_fragment = time_fragment_match.group(0)
+            for fmt in time_formats:
+                try:
+                    parsed_time = datetime.strptime(time_fragment, fmt).time().replace(microsecond=0)
+                    return datetime.combine(datetime.fromisoformat(date_value).date(), parsed_time).isoformat()
+                except Exception:
+                    continue
+
         return None
 
     @staticmethod
@@ -935,14 +966,20 @@ class AgentOrchestrator:
         combined = f"{AgentOrchestrator._collect_recent_user_text((user_context or {}).get('conversation_context'))}\n{text}".strip()
         params: dict[str, Any] = {}
 
-        title = AgentOrchestrator._extract_event_title_from_message(text)
+        title = AgentOrchestrator._extract_event_title_from_message(text) or AgentOrchestrator._extract_event_title_from_message(combined)
         if title:
             params["title"] = title
 
         date_value = AgentOrchestrator._extract_event_date(enriched=params, message=combined.lower())
-        time_candidates = AgentOrchestrator._extract_time_candidates_from_message(text)
-        start_hint = AgentOrchestrator._extract_labeled_time_from_message(message=text, label="start")
-        end_hint = AgentOrchestrator._extract_labeled_time_from_message(message=text, label="end")
+        time_candidates = AgentOrchestrator._extract_time_candidates_from_message(combined)
+        start_hint = (
+            AgentOrchestrator._extract_labeled_time_from_message(message=text, label="start")
+            or AgentOrchestrator._extract_labeled_time_from_message(message=combined, label="start")
+        )
+        end_hint = (
+            AgentOrchestrator._extract_labeled_time_from_message(message=text, label="end")
+            or AgentOrchestrator._extract_labeled_time_from_message(message=combined, label="end")
+        )
 
         if date_value:
             start_iso = None
@@ -982,12 +1019,12 @@ class AgentOrchestrator:
             if str(turn.get("role") or "").lower() != "assistant":
                 continue
             content = str(turn.get("content") or "").lower()
-            if (
-                "i can create that calendar event" in content
-                and "i still need" in content
-                and "start_time" in content
-                and "end_time" in content
-            ):
+            is_create_event_prompt = (
+                ("create" in content and "event" in content)
+                or "calendar event" in content
+            )
+            has_missing_fields_prompt = "i still need" in content or "need more information" in content
+            if is_create_event_prompt and has_missing_fields_prompt:
                 return True
 
         return False
