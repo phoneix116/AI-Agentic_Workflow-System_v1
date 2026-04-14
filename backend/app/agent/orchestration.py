@@ -310,11 +310,17 @@ class AgentOrchestrator:
                 tools_required = [self._build_send_new_email_requirement(state.user_input.content or "")]
                 reasoning = f"{reasoning} Direct outbound email compose request routed to outbound email tool."
 
+            requires_approval = bool(data.get("requires_approval", False))
+            if any(requirement.tool_name == "create_event" for requirement in tools_required):
+                requires_approval = True
+                if not data.get("approval_reason"):
+                    data["approval_reason"] = "Creating calendar events requires approval"
+
             state.plan = PlannerOutput(
                 action_type=action_enum,
                 reasoning=reasoning,
                 tools_required=tools_required,
-                requires_approval=bool(data.get("requires_approval", False)),
+                requires_approval=requires_approval,
                 approval_reason=data.get("approval_reason"),
                 confidence=float(data.get("confidence", 0.75)),
                 estimated_duration_seconds=2.0,
@@ -402,6 +408,9 @@ class AgentOrchestrator:
                         user_message=state.user_input.content,
                         conversation_context=((state.user_input.context or {}).get("user_context") or {}).get("conversation_context"),
                     )
+                    if tool_name == "create_event":
+                        # Calendar writes must always be approval-gated in chat flows.
+                        enriched_params["require_approval"] = True
                     coerced_params = self._coerce_tool_params(tool_fn=tool_fn, params=enriched_params)
                     safe_params = self._sanitize_tool_params(tool_fn=tool_fn, params=coerced_params)
                     missing_required = self._find_missing_required_params(tool_fn=tool_fn, params=safe_params)
@@ -1127,15 +1136,42 @@ class AgentOrchestrator:
 
     def _build_response(self, state: AgentState) -> None:
         if state.pending_approval:
+            pending_payload = state.pending_approval.action_payload or {}
+            event_preview = pending_payload.get("event_preview") or {}
+            is_create_event = str(state.pending_approval.action_type).lower() == "create_event"
+
+            message = "I prepared this action and it now needs your approval before execution."
+            if is_create_event:
+                title = event_preview.get("title") or "this event"
+                start_time = event_preview.get("start_time")
+                end_time = event_preview.get("end_time")
+                attendees = event_preview.get("attendees") or pending_payload.get("attendees") or []
+                attendees_text = ""
+                if isinstance(attendees, list) and attendees:
+                    attendees_text = f" with {', '.join(str(item) for item in attendees[:3])}"
+                if start_time and end_time:
+                    message = (
+                        f"I can create '{title}' from {start_time} to {end_time}{attendees_text}. "
+                        "Approve to add it to your calendar."
+                    )
+                else:
+                    message = f"I can create '{title}'{attendees_text}. Approve to add it to your calendar."
+
             state.response = ResponseContent(
-                message="I prepared this action and it now needs your approval before execution.",
+                message=message,
                 action_cards=[
                     ActionCard(
-                        id=state.pending_approval.approval_id,
-                        label="Review approval",
+                        id=f"approve-{state.pending_approval.approval_id}",
+                        label="Approve",
                         action="approve",
                         payload={"approval_id": state.pending_approval.approval_id},
-                    )
+                    ),
+                    ActionCard(
+                        id=f"reject-{state.pending_approval.approval_id}",
+                        label="Reject",
+                        action="reject",
+                        payload={"approval_id": state.pending_approval.approval_id},
+                    ),
                 ],
                 suggested_follow_ups=["Approve this action", "Modify this action", "Reject this action"],
             )

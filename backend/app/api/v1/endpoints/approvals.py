@@ -2,7 +2,7 @@
 
 import logging
 import json
-from typing import Optional
+from typing import Optional, Any
 from datetime import datetime, timedelta
 from uuid import uuid4
 
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user, TokenPayload
 from app.core.config import settings
 from app.db.config import get_db
-from app.db.models import User, Approval
+from app.db.models import User, Approval, CalendarEvent
 from app.schemas.approvals import (
     ApprovalRequest,
     ApprovalResponse,
@@ -21,6 +21,7 @@ from app.schemas.approvals import (
 )
 from app.cache.config import get_redis
 from app.repositories.repositories import ApprovalRepository
+from app.services.calendar import GoogleCalendarService
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,17 @@ async def execute_approved_action(
     """
     action_payload = approval.action_payload
     action_type = approval.approval_type
+
+    def _parse_payload_datetime(value: Any) -> datetime | None:
+        if value is None:
+            return None
+        try:
+            parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                return parsed.replace(tzinfo=None)
+            return parsed
+        except Exception:
+            return None
     
     logger.info(
         f"Executing approved action",
@@ -184,6 +196,80 @@ async def execute_approved_action(
             "thread_id": action_payload.get("thread_id"),
             "recipient": action_payload.get("to_recipient"),
             "subject": action_payload.get("subject"),
+            "executed_at": datetime.utcnow().isoformat(),
+            "trace_id": trace_id,
+        }
+
+    if action_type == Approval.ApprovalType.CREATE_EVENT:
+        user = db.query(User).filter(User.id == approval.user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found for approval execution",
+            )
+
+        title = str(action_payload.get("title") or "").strip()
+        start_dt = _parse_payload_datetime(action_payload.get("start_time"))
+        end_dt = _parse_payload_datetime(action_payload.get("end_time"))
+        if not title or not start_dt or not end_dt:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Approval payload is missing required event fields",
+            )
+
+        attendees = action_payload.get("attendees") or []
+        if isinstance(attendees, str):
+            attendees = [item.strip() for item in attendees.split(",") if item.strip()]
+        if not isinstance(attendees, list):
+            attendees = []
+
+        preferences = dict(user.preferences or {})
+        tokens = dict(preferences.get("calendar_oauth_tokens") or {})
+        access_token = tokens.get("access_token")
+        expires_at = _parse_payload_datetime(tokens.get("expires_at"))
+        if not access_token or (expires_at and expires_at <= datetime.utcnow()):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Calendar not connected or token expired. Reconnect Google Calendar and try again.",
+            )
+
+        calendar_service = GoogleCalendarService()
+        google_event = await calendar_service.create_event(
+            access_token=access_token,
+            event_data={
+                "title": title,
+                "description": action_payload.get("description"),
+                "start_time": start_dt,
+                "end_time": end_dt,
+                "timezone": action_payload.get("timezone") or user.timezone or "UTC",
+                "location": action_payload.get("location"),
+                "attendees": attendees,
+            },
+        )
+
+        event = CalendarEvent(
+            user_id=user.id,
+            google_event_id=google_event.get("id"),
+            title=title,
+            description=action_payload.get("description"),
+            start_time=start_dt,
+            end_time=end_dt,
+            location=action_payload.get("location"),
+            attendees=attendees,
+            status=CalendarEvent.EventStatus.SCHEDULED,
+        )
+        db.add(event)
+        db.flush()
+
+        return {
+            "action_type": action_type,
+            "status": "executed",
+            "event_id": event.id,
+            "title": event.title,
+            "start_time": event.start_time.isoformat(),
+            "end_time": event.end_time.isoformat(),
+            "google_event_id": google_event.get("id"),
+            "google_event_link": google_event.get("htmlLink"),
             "executed_at": datetime.utcnow().isoformat(),
             "trace_id": trace_id,
         }

@@ -41,8 +41,20 @@ export default function ChatBubble({ message }) {
           method: 'POST',
           body: JSON.stringify({}),
         })
-        const messageId = response?.execution_result?.message_id
-        setActionResult(messageId ? `✓ Approved and sent (message: ${messageId})` : '✓ Approved successfully')
+        const executionResult = response?.execution_result || {}
+        const messageId = executionResult?.message_id
+        const eventTitle = executionResult?.title
+        const eventLink = executionResult?.google_event_link
+
+        if (eventTitle && eventLink) {
+          setActionResult(`✓ Approved and created event '${eventTitle}' (${eventLink})`)
+        } else if (eventTitle) {
+          setActionResult(`✓ Approved and created event '${eventTitle}'`)
+        } else if (messageId) {
+          setActionResult(`✓ Approved and sent (message: ${messageId})`)
+        } else {
+          setActionResult('✓ Approved successfully')
+        }
         setActionResolved(true)
       } else if (action.action === 'reject' && action.payload) {
         await apiRequest(`/api/v1/approvals/${action.payload.approval_id}/decide?decision=reject&reason=User+rejected+through+chat`, {
