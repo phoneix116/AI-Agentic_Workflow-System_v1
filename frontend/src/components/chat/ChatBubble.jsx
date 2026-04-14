@@ -50,7 +50,10 @@ export default function ChatBubble({ message }) {
         if (actionType === 'create_event') {
           window.dispatchEvent(
             new CustomEvent('assistant:data-updated', {
-              detail: { tools: ['create_event'] },
+              detail: {
+                tools: ['create_event'],
+                eventStartTime: executionResult?.start_time,
+              },
             }),
           )
         } else if (actionType === 'send_email') {

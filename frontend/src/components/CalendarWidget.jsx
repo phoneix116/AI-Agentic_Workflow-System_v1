@@ -78,6 +78,20 @@ export default function CalendarWidget() {
 
     const onAssistantDataUpdated = (event) => {
       const tools = event?.detail?.tools || []
+      const eventStartTime = event?.detail?.eventStartTime
+
+      if (tools.includes('create_event') && typeof eventStartTime === 'string' && eventStartTime) {
+        const createdDate = new Date(eventStartTime)
+        if (!Number.isNaN(createdDate.getTime())) {
+          createdDate.setHours(0, 0, 0, 0)
+          const isSameDay = displayDate.toDateString() === createdDate.toDateString()
+          if (!isSameDay) {
+            setDisplayDate(createdDate)
+            return
+          }
+        }
+      }
+
       if (tools.includes('list_free_slots') || tools.includes('get_daily_schedule') || tools.includes('create_event') || tools.includes('update_event')) {
         loadSchedule()
       }
